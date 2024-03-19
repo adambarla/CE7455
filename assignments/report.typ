@@ -8,14 +8,23 @@
     (name: "Adam Barla", email: "n2308836j@e.ntu.edu.sg", affiliation: "NTU, Singapore"),
   )
 )
-
+#set heading(numbering: "1.a")
   
 = Configuration Optimization
-Implement the "pack padded sequence" function in PyTorch's RNN library. Report results under the default setting and discuss the benefits of this function.
 
-Experiment with different configurations (optimizers, learning rates, batch sizes, sizes of hidden embedding) and report the best configuration's performance on the validation and test sets.
-   
-Implement regularization techniques, describe them, and report accuracy results after application.
+==
+#text(fill:gray)[Implement the `pack_padded_sequence` function in PyTorch's RNN library. Report results under the default setting and discuss the benefits of this function.]
+
+`pack_padded_sequence` is useful when working with sequences of varying length.  
+
+==
+#text(fill:gray)[Experiment with different configurations (optimizers, learning rates, batch sizes, sizes of hidden embedding) and report the best configuration's performance on the validation and test sets.]
+
+==
+#text(fill:gray)[Implement regularization techniques, describe them, and report accuracy results after application.
+]
+
+
 
 = Input Embedding
 Switch from randomly initialized input word embeddings to pre-trained word2vec embeddings. Report accuracy on the validation set and compare performance.
