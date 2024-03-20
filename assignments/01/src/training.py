@@ -100,7 +100,7 @@ def epoch_evaluate(model, iterator, criterion):
     return epoch_loss / len(iterator), epoch_acc
 
 
-def train(run, model, optimizer, criterion, n_epochs, train_iterator, valid_iterator):
+def train(model, optimizer, criterion, n_epochs, train_iterator, valid_iterator):
     with tqdm(total=n_epochs, desc="Training Progress") as pbar:
         for epoch in range(n_epochs):
             train_loss, train_acc = epoch_train(
@@ -112,7 +112,7 @@ def train(run, model, optimizer, criterion, n_epochs, train_iterator, valid_iter
                 f" |  Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc*100:.2f}% |"
             )
             pbar.update(1)
-            run.log(
+            wandb.log(
                 {
                     "train_loss": train_loss,
                     "train_acc": train_acc,
@@ -142,7 +142,7 @@ def init_run(cfg):
         o = cfg.optimizer._target_.split(".")[-1]
         t = datetime.now().strftime("%Y%m%d_%H%M%S")
         cfg.name = f"{m}_{o}_{t}"
-    run = wandb.init(
+    wandb.init(
         name=cfg.name,
         group=cfg.group,
         project=cfg.wandb.project,
@@ -150,13 +150,12 @@ def init_run(cfg):
         config=OmegaConf.to_container(cfg, resolve=True),
         reinit=True,
     )
-    return run
 
 
 @hydra.main(config_path="conf", config_name="main", version_base=None)
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
-    run = init_run(cfg)
+    init_run(cfg)
     set_deterministic(cfg.seed)
     device = get_device(cfg)
     train_data, valid_data, test_data, TEXT, LABEL = load_data(cfg.seed)
@@ -171,9 +170,9 @@ def main(cfg: DictConfig):
     )
     print(model)
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters(), lr=cfg.lr)
     criterion = torch.nn.CrossEntropyLoss()
-    train(run, model, optimizer, criterion, cfg.epochs, train_iterator, valid_iterator)
+    train(model, optimizer, criterion, cfg.epochs, train_iterator, valid_iterator)
 
 
 if __name__ == "__main__":

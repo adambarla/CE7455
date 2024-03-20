@@ -1,0 +1,29 @@
+program: training.py
+name: 01_b
+entity: crutch
+project: "Deep Learning models for Sentence Classification"
+method: grid
+#run_cap: 100
+metric:
+  goal: maximize
+  name: valid_acc
+#early_terminate:
+#  type: hyperband
+#  min_iter: 10
+#  eta: 1
+parameters:
+  lr:
+    values: [ 0.00001, 0.0001, 0.001, 0.01, 0.1 ]
+  batch_size:
+    values: [ 32, 64, 128 ]
+  optimizer:
+    values: [ sgd, adam, adadelta, adagrad, rmsprop ]
+  model.hidden_dim:
+    values: [ 50, 100, 200, 400 ]
+
+command:
+  - ${env}
+  - python3
+  - ${program}
+  - model=packed_rnn
+  - ${args_no_hyphens}
