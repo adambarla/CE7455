@@ -1,9 +1,9 @@
-import torch
+from datetime import datetime
+import wandb
 from tqdm import tqdm
 import hydra
 import numpy as np
 import random
-import spacy
 from omegaconf import OmegaConf, DictConfig
 from torchtext import data
 import torch
@@ -100,35 +100,29 @@ def epoch_evaluate(model, iterator, criterion):
     return epoch_loss / len(iterator), epoch_acc
 
 
-def train(model, optimizer, criterion, n_epochs, train_iterator, valid_iterator):
-    best_valid_loss = float("inf")
-    best_valid_acc = 0
+def train(run, model, optimizer, criterion, n_epochs, train_iterator, valid_iterator):
     with tqdm(total=n_epochs, desc="Training Progress") as pbar:
         for epoch in range(n_epochs):
             train_loss, train_acc = epoch_train(
                 model, train_iterator, optimizer, criterion
             )
             valid_loss, valid_acc = epoch_evaluate(model, valid_iterator, criterion)
-
-            if valid_loss < best_valid_loss:
-                best_valid_loss = valid_loss
-                best_valid_acc = valid_acc
-                torch.save(model.state_dict(), "tut1-model.pt")
-
             pbar.set_description(
                 f"Train Loss: {train_loss:.3f} | Train Acc: {train_acc*100:.2f}%"
                 f" |  Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc*100:.2f}% |"
             )
             pbar.update(1)
-    return best_valid_loss, best_valid_acc
+            run.log(
+                {
+                    "train_loss": train_loss,
+                    "train_acc": train_acc,
+                    "valid_loss": valid_loss,
+                    "valid_acc": valid_acc,
+                }
+            )
 
 
-@hydra.main(config_path="conf", config_name="main", version_base=None)
-def main(cfg: DictConfig):
-    print(OmegaConf.to_yaml(cfg))
-    set_deterministic(cfg.seed)
-    train_data, valid_data, test_data, TEXT, LABEL = load_data(cfg.seed)
-
+def get_device(cfg: DictConfig) -> torch.device:
     if cfg.device is not None:
         device = torch.device(cfg.device)
     else:
@@ -139,14 +133,39 @@ def main(cfg: DictConfig):
             if torch.backends.mps.is_available()
             else "cpu"
         )
+    return device
 
+
+def init_run(cfg):
+    if cfg.name is None:
+        m = cfg.model._target_.split(".")[-1]
+        o = cfg.optimizer._target_.split(".")[-1]
+        t = datetime.now().strftime("%Y%m%d_%H%M%S")
+        cfg.name = f"{m}_{o}_{t}"
+    run = wandb.init(
+        name=cfg.name,
+        group=cfg.group,
+        project=cfg.wandb.project,
+        entity=cfg.wandb.entity,
+        config=OmegaConf.to_container(cfg, resolve=True),
+        reinit=True,
+    )
+    return run
+
+
+@hydra.main(config_path="conf", config_name="main", version_base=None)
+def main(cfg: DictConfig):
+    print(OmegaConf.to_yaml(cfg))
+    run = init_run(cfg)
+    set_deterministic(cfg.seed)
+    device = get_device(cfg)
+    train_data, valid_data, test_data, TEXT, LABEL = load_data(cfg.seed)
     train_iterator, valid_iterator, test_iterator = data.BucketIterator.splits(
         (train_data, valid_data, test_data),
         batch_size=cfg.batch_size,
         sort_within_batch=True,
         device=device,
     )
-
     model = hydra.utils.instantiate(
         cfg.model, vocab_size=len(TEXT.vocab), output_dim=len(LABEL.vocab)
     )
@@ -154,7 +173,7 @@ def main(cfg: DictConfig):
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     criterion = torch.nn.CrossEntropyLoss()
-    train(model, optimizer, criterion, cfg.epochs, train_iterator, valid_iterator)
+    train(run, model, optimizer, criterion, cfg.epochs, train_iterator, valid_iterator)
 
 
 if __name__ == "__main__":

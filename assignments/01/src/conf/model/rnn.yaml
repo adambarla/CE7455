@@ -1,3 +1,1 @@
 _target_: models.rnn.RNN
-embedding_dim: 100
-hidden_dim: 50
