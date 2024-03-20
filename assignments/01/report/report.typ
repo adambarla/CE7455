@@ -15,10 +15,13 @@
 ==
 #text(fill:gray)[Implement the `pack_padded_sequence` function in PyTorch's RNN library. Report results under the default setting and discuss the benefits of this function.]
 
-`pack_padded_sequence` is useful when working with sequences of varying length.  
+The function `pack_padded_sequence` takes input sequences of varying lengths and packs them into a compact form, before they are fed into the RNN.  By using pack_padded_sequence, the model can skip the padded areas, focusing only on the actual data, which can lead to more accurate and faster training.
+
+I conducted $10$ training runs of $100$ epochs each for model using the function and for the baseline model. I compared the models on validation accuracy so the test accuracy can still serve as an indicator of the performace on unseen data in the end. Average valildation accuracy of the baseline model was $67.17$% while model with `pack_padded_sequence` reached $68.53$%, which is a minor improvement. The average duration of one epoch went up by $~3.5$ seconds from $17.5$s to $21$s. This can be improved by packing the sequences only once and not every time `forward` method is called.
 
 ==
 #text(fill:gray)[Experiment with different configurations (optimizers, learning rates, batch sizes, sizes of hidden embedding) and report the best configuration's performance on the validation and test sets.]
+
 
 ==
 #text(fill:gray)[Implement regularization techniques, describe them, and report accuracy results after application.
