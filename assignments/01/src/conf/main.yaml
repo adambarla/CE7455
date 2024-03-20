@@ -1,0 +1,10 @@
+defaults:
+  - _self_
+  - model: rnn
+
+seed: 1234
+batch_size: 64
+epochs: 100
+learning_rate: 0.01
+device: cpu
+
