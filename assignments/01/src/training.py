@@ -121,7 +121,7 @@ def main(cfg: DictConfig):
         device=device,
     )
     model = hydra.utils.instantiate(
-        cfg.model, vocab_size=len(TEXT.vocab), output_dim=len(LABEL.vocab)
+        cfg.model, vocab_size=len(TEXT.vocab), output_dim=len(LABEL.vocab), TEXT=TEXT
     )
     print(model)
     model.to(device)

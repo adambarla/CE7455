@@ -1,8 +1,8 @@
 defaults:
   - _self_
   - model: packed_rnn
-  - optimizer: adadelta
-  - regularizer: null
+  - optimizer: adam
+  - regularizer: l2
 
 model:
   embedding_dim: 100
@@ -10,21 +10,21 @@ model:
   dropout: ${dropout}
 
 regularizer:
-  alpha: 0.01
+  alpha: 0.0006332825849228081
   use: false
 
 batch_size: 32
-lr: 0.1
-patience: null
-grad_clip_threshold: null
-dropout: 0
+lr: 0.0008726644867850513
+patience: 10
+grad_clip_threshold: 3.409241906075233
+dropout: 0.014878368933965491
 
 wandb:
   entity: crutch
   project: "Deep Learning models for Sentence Classification"
 
 seed: 1234
-epochs: 100
+epochs: 500
 device: cpu
 name: null
-group: 1_c_regularization
+group: 2_gensim

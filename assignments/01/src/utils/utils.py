@@ -81,3 +81,27 @@ def count_correct(labels, predictions):
     _, predicted_classes = predictions.max(dim=1)
     correct_predictions = (predicted_classes == labels).float()
     return correct_predictions.sum().item()
+
+
+def get_embedding_matrix(TEXT, word_vectors):
+    embedding_dim = 300
+    num_embeddings = len(TEXT.vocab)
+
+    embedding_matrix = torch.zeros(num_embeddings, embedding_dim)
+
+    words_found = 0
+    words_not_found = 0
+    for i, word in enumerate(TEXT.vocab.itos):
+        if word in word_vectors:
+            embedding_vector = word_vectors[word]
+            words_found += 1
+        else:
+            # If the word is not in pre-trained word vectors, initialize it with zeros.
+            embedding_vector = np.zeros(embedding_dim)
+            words_not_found += 1
+
+        embedding_matrix[i] = torch.tensor(embedding_vector)
+
+    print(f"Words found in pre-trained vectors: {words_found}")
+    print(f"Words not found in pre-trained vectors: {words_not_found}")
+    return embedding_matrix
