@@ -75,3 +75,9 @@ def set_deterministic(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def count_correct(labels, predictions):
+    _, predicted_classes = predictions.max(dim=1)
+    correct_predictions = (predicted_classes == labels).float()
+    return correct_predictions.sum().item()

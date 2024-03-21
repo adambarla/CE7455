@@ -4,7 +4,7 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 from torchtext import data
 import torch
-from utils import get_device, init_run, load_data, set_deterministic
+from utils import count_correct, set_deterministic, init_run, load_data, get_device
 
 
 def epoch_train(model, iterator, optimizer, criterion):
@@ -24,12 +24,7 @@ def epoch_train(model, iterator, optimizer, criterion):
         optimizer.step()
         epoch_loss += loss.item()
 
-        # Compute the number of correct predictions
-        _, predicted_classes = predictions.max(dim=1)
-        correct_predictions = (
-            predicted_classes == batch.label
-        ).float()  # Convert to float for summation
-        total_correct += correct_predictions.sum().item()
+        total_correct += count_correct(batch.label, predictions)
         total_instances += batch.label.size(0)
 
     return epoch_loss / len(iterator), total_correct / total_instances
@@ -51,19 +46,16 @@ def epoch_evaluate(model, iterator, criterion):
             loss = criterion(predictions, batch.label)
             epoch_loss += loss.item()
 
-            # Compute the number of correct predictions
-            _, predicted_classes = predictions.max(dim=1)
-            correct_predictions = (
-                predicted_classes == batch.label
-            ).float()  # Convert to float for summation
-            total_correct += correct_predictions.sum().item()
+            total_correct += count_correct(batch.label, predictions)
             total_instances += batch.label.size(0)
 
     epoch_acc = total_correct / total_instances
     return epoch_loss / len(iterator), epoch_acc
 
 
-def train(model, optimizer, criterion, n_epochs, train_iterator, valid_iterator):
+def train(
+    model, optimizer, criterion, n_epochs, train_iterator, valid_iterator, test_iterator
+):
     with tqdm(total=n_epochs, desc="Training Progress") as pbar:
         for epoch in range(n_epochs):
             train_loss, train_acc = epoch_train(
@@ -72,7 +64,7 @@ def train(model, optimizer, criterion, n_epochs, train_iterator, valid_iterator)
             valid_loss, valid_acc = epoch_evaluate(model, valid_iterator, criterion)
             pbar.set_description(
                 f"Train Loss: {train_loss:.3f} | Train Acc: {train_acc*100:.2f}%"
-                f" |  Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc*100:.2f}% |"
+                f" |  Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc*100:.2f}% "
             )
             pbar.update(1)
             wandb.log(
@@ -83,6 +75,9 @@ def train(model, optimizer, criterion, n_epochs, train_iterator, valid_iterator)
                     "valid_acc": valid_acc,
                 }
             )
+    test_loss, test_acc = epoch_evaluate(model, test_iterator, criterion)
+    print(f" Test Loss: {test_loss:.3f} |  Test Acc: {test_acc*100:.2f}%")
+    wandb.log({"test_loss": test_loss, "test_acc": test_acc})
 
 
 @hydra.main(config_path="conf", config_name="main", version_base=None)
@@ -105,7 +100,15 @@ def main(cfg: DictConfig):
     model.to(device)
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters(), lr=cfg.lr)
     criterion = torch.nn.CrossEntropyLoss()
-    train(model, optimizer, criterion, cfg.epochs, train_iterator, valid_iterator)
+    train(
+        model,
+        optimizer,
+        criterion,
+        cfg.epochs,
+        train_iterator,
+        valid_iterator,
+        test_iterator,
+    )
 
 
 if __name__ == "__main__":

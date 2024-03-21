@@ -1,2 +1,2 @@
-_target_: models.rnn.packed_RNN
+_target_: models.rnn.PackedRNN
 

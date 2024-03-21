@@ -1,10 +1,11 @@
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.nn as nn
+from utils import is_sorted
 
 
 class RNN(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim, **kwargs):
         super().__init__()
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
@@ -28,25 +29,21 @@ class RNN(nn.Module):
         return self.fc(hidden.squeeze(0))
 
 
-class packed_RNN(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim):
+class PackedRNN(nn.Module):
+    def __init__(
+        self, vocab_size, embedding_dim, hidden_dim, output_dim, dropout=0, **kwargs
+    ):
         super().__init__()
-
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-
-        self.rnn = nn.RNN(embedding_dim, hidden_dim)
-
+        # dropout in nn.RNN is not applied oh hidden state only on outputs of all layers except the last layer
+        self.rnn = nn.RNN(embedding_dim, hidden_dim, dropout=dropout)
+        self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, text, text_lengths):
-        # assert is_sorted(text_lengths)
-
-        # text = [sent len, batch size]
-        embedded = self.embedding(text)
-        # embedded = [sent len, batch size, emb dim]
-
-        packed_input = pack_padded_sequence(embedded, text_lengths)
-
-        packed_output, ht = self.rnn(packed_input)
-
-        return self.fc(ht.squeeze(0))
+        assert is_sorted(text_lengths)
+        packed_embedded = self.embedding(text)
+        packed_input = pack_padded_sequence(packed_embedded, text_lengths)
+        packed_output, hidden = self.rnn(packed_input)
+        hidden = self.dropout(hidden)
+        return self.fc(hidden.squeeze(0))

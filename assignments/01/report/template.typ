@@ -48,7 +48,7 @@
 //  Main body
       
   set par(justify: true)
-//  show: columns.with(2, gutter: 1em)
+  show: columns.with(2, gutter: 1em)
 
   body
 }

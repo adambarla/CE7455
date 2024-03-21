@@ -5,7 +5,9 @@ defaults:
 model:
   embedding_dim: 100
   hidden_dim: 200
+  dropout: ${dropout}
 seed: 1234
+dropout: 0
 batch_size: 32
 epochs: 100
 lr: 0.1
