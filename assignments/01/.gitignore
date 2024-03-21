@@ -2,3 +2,4 @@
 **/.fleet/*
 **/.idea/*
 **/wandb/*
+**/__pycache__/*

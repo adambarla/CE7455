@@ -1,17 +1,17 @@
 defaults:
   - _self_
-  - model: rnn
-  - optimizer: sgd
+  - model: packed_rnn
+  - optimizer: adadelta
 model:
   embedding_dim: 100
-  hidden_dim: 50
+  hidden_dim: 200
 seed: 1234
-batch_size: 64
+batch_size: 32
 epochs: 100
-lr: 0.01
+lr: 0.1
 device: cpu
 name: null
-group: null
+group: 1_c_regularization
 
 wandb:
   entity: crutch
