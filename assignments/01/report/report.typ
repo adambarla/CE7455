@@ -11,7 +11,7 @@
 #set heading(numbering: "1.a")
 #show link: set text(blue)
 #show link: underline
-
+#show figure: set block(breakable: true)
 
 = Configuration Optimization
 
@@ -55,6 +55,22 @@ lr: 0.1
 ```
 
 The validation and test accuracy reached was $77.71$% and $83.8$% respectively.
+=== Parameter interaction analysis
+
+@hparam_interaction shows an average validation accuracy when two parameters are kept at a specific value.
+We can observe trends that help us better understand which hyperparameters are optimal.
+For example we can see general correlation between hidden embedding size and validation accuracy, which is not suprising.
+Adam and RMSprop optimizers seem to generally dominate, even though Adadelta reached the highest validation accuracy.  Each optimizer has a learning rate at which it works best as it seems.
+Trend towards smaller batch sizes seems curious. Given more time I would explore it further.
+
+#figure(
+  image("./figures/hparam_interaction.png" , width: 90%),
+  caption: [Each square represents a mean validation accuracy of runs with two parameters set to particular value.],
+  placement: top,
+) <hparam_interaction>
+
+For the next experiments I will use Adam with hidden dimension of $200$, batch size of 32.
+Learning rate may vary in the future but a good value for this configuration seems $0.001$.
 
 ==
 #text(fill:gray)[Implement regularization techniques, describe them, and report accuracy results after application.
@@ -68,19 +84,41 @@ Dropout has an effect of training and using an ensamble of models and promotes l
 
 === L$1\/2$ Regularization
 
+We can include a regularization parameter to the loss, which is computed based on the parameters of the model.\
+For L1 it is
+$ alpha sum_(omega in Omega)|omega| $
+and for L2 it is
+$ alpha sum_(omega in Omega)omega^2 $
+where $Omega$ is a set of all parameters of the model and $alpha$ is a weight of the regularization parameter.
 
+This regularization results in sparsity.
 
-=== Gradient cliping
+=== Gradient clipping
+
+To counteract exploding gradient we can employ gradient clipping.
+It scales the gradient $bold(g)$ down if it's norm $norm(bold(g))$ is larger then some treshold $t$.
+
+$ text("if") norm(bold(g)) >= t: bold(g) <- t * (bold(g)/norm(bold(g))) $
+
+For this I used function `torch.nn.utils.clip_grad_norm`.
 
 === Early stoping
+Up to a point, training improves the learner's performance on the validation set. Past that point, however, improving on the training data comes at the expense of increased generalization error.
+
 
 === Batch normalization
 
+Batch normalization makes training of NNs faster and more stable through normalization of the layers' inputs by re-centering and re-scaling.
+It can mitigate the problem of internal covariate shift, where parameter initialization and changes in the distribution of the inputs of each layer affect the learning rate of the network.
+
+It isnt' common to use batch norm with RNNs but it can be used later with more complex classifiers in later sections.
+
+
 = Input Embedding
-Switch from randomly initialized input word embeddings to pre-trained word2vec embeddings. Report accuracy on the validation set and compare performance.
+#text(gray)[Switch from randomly initialized input word embeddings to pre-trained word2vec embeddings. Report accuracy on the validation set and compare performance.
 
-Gensim installation and pretrained word2vec models: [Gensim](https://radimrehurek.com/gensim/intro.html#installation), [Pretrained models](https://radimrehurek.com/gensim/models/word2vec.html#pretrained-models).
-
+Gensim installation and pretrained word2vec models: #link("https://radimrehurek.com/gensim/intro.html#installation")[Gensim], #link("https://radimrehurek.com/gensim/models/word2vec.html#pretrained-models")[Pretrained models].
+]
 = Output Embedding
 Explore options for computing sentence embedding beyond the final hidden representation. Implement the best option(s) and report accuracy on the validation set, comparing it to the performance in Task 2.
 
