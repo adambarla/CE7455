@@ -7,7 +7,9 @@ import torch
 from utils import count_correct, set_deterministic, init_run, load_data, get_device
 
 
-def epoch_train(model, iterator, optimizer, criterion):
+def epoch_train(
+    model, iterator, optimizer, criterion, regularizer=None, grad_clip_threshold=None
+):
     epoch_loss = 0
     total_correct = 0
     total_instances = 0
@@ -16,14 +18,16 @@ def epoch_train(model, iterator, optimizer, criterion):
     for batch in iterator:
         optimizer.zero_grad()
         text, text_lengths = batch.text
-        # Assuming your model's forward method automatically handles padding, then no need to pack sequence here
         predictions = model(text, text_lengths)
 
         loss = criterion(predictions, batch.label)
+        if regularizer is not None:
+            loss += regularizer(model)
         loss.backward()
+        if grad_clip_threshold is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_threshold)
         optimizer.step()
         epoch_loss += loss.item()
-
         total_correct += count_correct(batch.label, predictions)
         total_instances += batch.label.size(0)
 
@@ -39,13 +43,9 @@ def epoch_evaluate(model, iterator, criterion):
     with torch.no_grad():
         for batch in iterator:
             text, text_lengths = batch.text
-
-            # Assuming your model's forward method automatically handles padding, then no need to pack sequence here
             predictions = model(text, text_lengths)
-
             loss = criterion(predictions, batch.label)
             epoch_loss += loss.item()
-
             total_correct += count_correct(batch.label, predictions)
             total_instances += batch.label.size(0)
 
@@ -54,12 +54,28 @@ def epoch_evaluate(model, iterator, criterion):
 
 
 def train(
-    model, optimizer, criterion, n_epochs, train_iterator, valid_iterator, test_iterator
+    model,
+    optimizer,
+    criterion,
+    n_epochs,
+    train_iterator,
+    valid_iterator,
+    test_iterator,
+    regularizer=None,
+    patience=torch.inf,
+    grad_clip_threshold=None,
 ):
+    max_acc = -1
+    epochs_since_improvement = 0
     with tqdm(total=n_epochs, desc="Training Progress") as pbar:
         for epoch in range(n_epochs):
             train_loss, train_acc = epoch_train(
-                model, train_iterator, optimizer, criterion
+                model,
+                train_iterator,
+                optimizer,
+                criterion,
+                regularizer,
+                grad_clip_threshold,
             )
             valid_loss, valid_acc = epoch_evaluate(model, valid_iterator, criterion)
             pbar.set_description(
@@ -75,6 +91,17 @@ def train(
                     "valid_acc": valid_acc,
                 }
             )
+            if valid_acc > max_acc:
+                max_acc = valid_acc
+                epochs_since_improvement = 0
+            else:
+                epochs_since_improvement += 1
+            if epochs_since_improvement >= patience:
+                break
+    if epochs_since_improvement >= patience:
+        print(
+            f"Early stopping triggered in epoch {epoch + 1} because val/acc hasn't improved for {epochs_since_improvement} epochs."
+        )
     test_loss, test_acc = epoch_evaluate(model, test_iterator, criterion)
     print(f" Test Loss: {test_loss:.3f} |  Test Acc: {test_acc*100:.2f}%")
     wandb.log({"test_loss": test_loss, "test_acc": test_acc})
@@ -100,6 +127,10 @@ def main(cfg: DictConfig):
     model.to(device)
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters(), lr=cfg.lr)
     criterion = torch.nn.CrossEntropyLoss()
+    regularizer = (
+        hydra.utils.instantiate(cfg.regularizer) if cfg.regularizer.use else None
+    )
+    patience = cfg.patience if cfg.patience is not None else torch.inf
     train(
         model,
         optimizer,
@@ -108,6 +139,9 @@ def main(cfg: DictConfig):
         train_iterator,
         valid_iterator,
         test_iterator,
+        regularizer,
+        patience,
+        cfg.grad_clip_threshold,
     )
 
 

@@ -1,0 +1,39 @@
+program: training.py
+name: 01_c
+entity: crutch
+project: "Deep Learning models for Sentence Classification"
+method: bayes
+run_cap: 200
+metric:
+    goal: maximize
+    name: valid_acc
+early_terminate:
+    type: hyperband
+    min_iter: 10
+    eta: 1
+parameters:
+    lr:
+        min: 0.0001
+        max: 1.0
+    dropout:
+        min: 0.0
+        max: 0.5
+    regularizer.alpha:
+        min: 0.0
+        max: 1.0
+    grad_clip_threshold:
+        min: 5.0
+        max: 15.0
+
+command:
+    - ${env}
+    - python3
+    - ${program}
+    - model=packed_rnn
+    - optimizer=adam
+    - batch_size=32
+    - epochs=500
+    - regularizer=l2
+    - patience=10
+    - model.hidden_dim=400
+    - ${args_no_hyphens}
