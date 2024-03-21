@@ -7,14 +7,18 @@
   set page(numbering: "1", number-align: center, margin: 1cm)
   set text(font: "Linux Libertine", lang: "en", size: 10pt)
 
+  show link: set text(blue)
+  show link: underline
+  show figure: set block(breakable: true)
+
   // Set paragraph spacing.
   show par: set block(above: 0.75em, below: 0.75em)
 
-  set heading(numbering: "1.1")
+  set heading(numbering: "1.1.1")
 
   // Set run-in subheadings, starting at level 3.
   show heading: it => {
-    if it.level > 2 {
+    if it.level > 3 {
       parbreak()
       text(11pt, style: "italic", weight: "regular", it.body + ".")
     } else {

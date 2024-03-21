@@ -1,6 +1,5 @@
 #import "template.typ": *
 
-
 #show: project.with(
   title: "Deep Learning models for Sentence Classification,
   Assingment 1, course CE7455",
@@ -8,10 +7,6 @@
     (name: "Adam Barla", email: "n2308836j@e.ntu.edu.sg", affiliation: "NTU, Singapore"),
   )
 )
-#set heading(numbering: "1.a")
-#show link: set text(blue)
-#show link: underline
-#show figure: set block(breakable: true)
 
 = Configuration Optimization
 
@@ -35,23 +30,23 @@ Using `hydra` and `wandb` I created a #link("https://wandb.ai/crutch/Deep%20Lear
 I chose to test using grid search over these parameters based on some empirical test runs:
 
 ```yaml
-lr:
-  values: [ 0.00001, 0.0001, 0.001, 0.01, 0.1 ]
-batch_size:
-  values: [ 32, 64, 128 ]
-optimizer:
-  values: [ sgd, adam, adadelta, adagrad, rmsprop ]
-model.hidden_dim:
-  values: [ 50, 100, 200, 400 ]
+  lr:
+    values: [ 0.00001, 0.0001, 0.001, 0.01, 0.1 ]
+  batch_size:
+    values: [ 32, 64, 128 ]
+  optimizer:
+    values: [ sgd, adam, adadelta, adagrad, rmsprop ]
+  model.hidden_dim:
+    values: [ 50, 100, 200, 400 ]
 ```
 
 I tested each combination of parameters with `PackedRNN` class from @section_1a for $100$ epochs. The best performance on validation accuracy was achieved when using these parameters:
 
 ```yaml
-hidden_dim: 200
-optimizer: adadelta
-batch_size: 32
-lr: 0.1
+  hidden_dim: 200
+  optimizer: adadelta
+  batch_size: 32
+  lr: 0.1
 ```
 
 The validation and test accuracy reached was $77.71$% and $83.8$% respectively.
@@ -82,7 +77,7 @@ This has proven to be an effective technique for regularization and preventing t
 Dropout has an effect of training and using an ensamble of models and promotes learning of a sparse representation.
 
 
-=== L$1\/2$ Regularization
+=== L1/2 Regularization
 
 We can include a regularization parameter to the loss, which is computed based on the parameters of the model.\
 For L1 it is
@@ -105,6 +100,7 @@ For this I used function `torch.nn.utils.clip_grad_norm`.
 === Early stoping
 Up to a point, training improves the learner's performance on the validation set. Past that point, however, improving on the training data comes at the expense of increased generalization error.
 
+I implemented early stoping with patience. If validation accuracy doesn't improve in `patience` epochs, the run is terminated. By using patience we can increase number of epochs to a large value because models stop by themselves.
 
 === Batch normalization
 
@@ -113,12 +109,47 @@ It can mitigate the problem of internal covariate shift, where parameter initial
 
 It isnt' common to use batch norm with RNNs but it can be used later with more complex classifiers in later sections.
 
+=== Results of regularization
+
+I conducting another #link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/sweeps/nf1o9d3o?nw=nwusercrutch")[sweep] over the new hyperparameters.
+I kept the previously found parameters and I additionaly set `patience` to $10$, number of epochs to $500$ and regularization to l2. I picked l2 over l1 by conducting smaller sweeps, where l2 always outperformed l1. I searched over these parameters:
+
+```yaml
+    lr:
+        min: 0.00001
+        max: 0.001
+    dropout:
+        min: 0.0
+        max: 0.5
+    regularizer.alpha:
+        min: 0.00001
+        max: 0.01
+    grad_clip_threshold:
+        min: 1.0
+        max: 10.0
+```
+
+I searched over learning rate because regularization techniques might result in a different optimal learning rate.
+The best parameters found were:
+```yaml
+  regularizer.alpha: 0.0006332825849228081
+  lr: 0.0008726644867850513
+  grad_clip_threshold: 3.409241906075233
+  dropout: 0.014878368933965491
+```
+and the model with these parameters achieved validation and test accuracy reached was $86.88$% and $89.2$% respectively, which is an improvement.
 
 = Input Embedding
 #text(gray)[Switch from randomly initialized input word embeddings to pre-trained word2vec embeddings. Report accuracy on the validation set and compare performance.
-
-Gensim installation and pretrained word2vec models: #link("https://radimrehurek.com/gensim/intro.html#installation")[Gensim], #link("https://radimrehurek.com/gensim/models/word2vec.html#pretrained-models")[Pretrained models].
+- You can refer to #link("https://radimrehurek.com/gensim/intro.html#installation")[here] on how to install gensim to in order to work with word2vec. @rehurek_lrec
+- Pretrained word2vec models can be downloaded following #link("https://radimrehurek.com/gensim/models/word2vec.html#pretrained-model")[link]. Use `word2vec-google-news-300` as the pretrained word2vec embeddings.
 ]
+
+I created a new class `GensimPackedRNN`. The `nn.Embedding` in this class is initialized through function `from_pretrained`.
+This function requires an matrix of $text("vocab_size")times text("embedding_size")$. I create it for the vocabulary used before by iterating through the words and finding a corresponding embedding in the `word2vec-google-news-300`. For words that are not in the vocabulary of the word2vec model I just insert an empty vector as an embedding. In total, 419 out of 7687 weren't found. These include for example `<unk>` and `<pad>` tokens, symbols such as `?` and `-`, numbers, names and complex words such as `hendecasyllabic`.
+
+
+
 = Output Embedding
 Explore options for computing sentence embedding beyond the final hidden representation. Implement the best option(s) and report accuracy on the validation set, comparing it to the performance in Task 2.
 
