@@ -77,3 +77,39 @@ class GensimPackedRNN(nn.Module):
         packed_output, hidden = self.rnn(packed_input)
         hidden = self.dropout(hidden)
         return self.fc(hidden.squeeze(0))
+
+
+class AttentionGensimPackedRNN(nn.Module):
+    def __init__(
+        self,
+        vocab_size,
+        embedding_dim,
+        hidden_dim,
+        output_dim,
+        TEXT,
+        dropout=0,
+        n_heads=1,
+        **kwargs
+    ):
+        super().__init__()
+        word_vectors = gensim.downloader.load("word2vec-google-news-300")
+        embedding_matrix = get_embedding_matrix(TEXT, word_vectors)
+        self.embedding = nn.Embedding.from_pretrained(embedding_matrix)
+        # dropout in nn.RNN is not applied oh hidden state only on outputs of all layers except the last layer
+        self.rnn = nn.RNN(300, hidden_dim, dropout=dropout)
+        self.attention = nn.MultiheadAttention(hidden_dim, n_heads)
+        self.dropout = nn.Dropout(dropout)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, text, text_lengths):
+        # assert is_sorted(text_lengths)
+        embedded = self.embedding(text)
+        packed_input = pack_padded_sequence(embedded, text_lengths)
+        packed_output, _ = self.rnn(packed_input)
+        padded_output, _ = pad_packed_sequence(packed_output)
+        attention_output, _ = self.attention(
+            padded_output, padded_output, padded_output
+        )
+        sentence_embedding = torch.mean(attention_output, dim=0)
+        sentence_embedding = self.dropout(sentence_embedding)
+        return self.fc(sentence_embedding.squeeze(0))

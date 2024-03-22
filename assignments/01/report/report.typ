@@ -109,7 +109,7 @@ It can mitigate the problem of internal covariate shift, where parameter initial
 
 It isnt' common to use batch norm with RNNs but it can be used later with more complex classifiers in later sections.
 
-=== Results of regularization
+=== Results of regularization <regularization>
 
 I conducting another #link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/sweeps/nf1o9d3o?nw=nwusercrutch")[sweep] over the new hyperparameters.
 I kept the previously found parameters and I additionaly set `patience` to $10$, number of epochs to $500$ and regularization to l2. I picked l2 over l1 by conducting smaller sweeps, where l2 always outperformed l1. I searched over these parameters:
@@ -139,7 +139,7 @@ The best parameters found were:
 ```
 and the model with these parameters achieved validation and test accuracy reached was $86.88$% and $89.2$% respectively, which is an improvement.
 
-= Input Embedding
+= Input Embedding <gensim>
 #text(gray)[Switch from randomly initialized input word embeddings to pre-trained word2vec embeddings. Report accuracy on the validation set and compare performance.
 - You can refer to #link("https://radimrehurek.com/gensim/intro.html#installation")[here] on how to install gensim to in order to work with word2vec. @rehurek_lrec
 - Pretrained word2vec models can be downloaded following #link("https://radimrehurek.com/gensim/models/word2vec.html#pretrained-model")[link]. Use `word2vec-google-news-300` as the pretrained word2vec embeddings.
@@ -148,13 +148,51 @@ and the model with these parameters achieved validation and test accuracy reache
 I created a new class `GensimPackedRNN`. The `nn.Embedding` in this class is initialized through function `from_pretrained`.
 This function requires an matrix of $text("vocab_size")times text("embedding_size")$. I create it for the vocabulary used before by iterating through the words and finding a corresponding embedding in the `word2vec-google-news-300`. For words that are not in the vocabulary of the word2vec model I just insert an empty vector as an embedding. In total, 419 out of 7687 weren't found. These include for example `<unk>` and `<pad>` tokens, symbols such as `?` and `-`, numbers, names and complex words such as `hendecasyllabic`.
 
-
+The model, with same hyperparameters as in @regularization, #link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/runs/j6t300g6?nw=nwusercrutch")[reached] accuracy of $83.76$% and $86.6$% on validation and test data, which is a slight decrease that may have been caused by the missing embeddings.
 
 = Output Embedding
-Explore options for computing sentence embedding beyond the final hidden representation. Implement the best option(s) and report accuracy on the validation set, comparing it to the performance in Task 2.
+#text(gray)[Explore options for computing sentence embedding beyond the final hidden representation. Implement the best option(s) and report accuracy on the validation set, comparing it to the performance in Task 2.]
+
+== Average of Word Embeddings
+
+One of the simplest methods is to take the average of the word embeddings of all words in the sentence. This method is easy to implement but does not take into account the order of the words in the sentence.
+
+== Concatenation of First and Last Hidden States
+In a bidirectional RNN, the first hidden state captures the "beginning" of the sentence, and the last hidden state captures the "end" of the sentence. Concatenating these two hidden states can provide a more comprehensive representation of the sentence.
+
+== Max/Average Pooling of hidden states
+Max or average pooling operations can be applied to the hidden states of an RNN to create a sentence embedding. Max pooling captures the most important features, while average pooling captures the average features of the hidden states.
+
+== Self-Attention
+
+To calculate the sentence embedding we can compute a weighted sum of all hidden states in the sentence. The weights are learned through self-attention during training and determine the importance of each word to the meaning of the sentence.
+
+I opted for using this technique. I implemented `AttentionGensimPackedRNN` class that uses multiheaded attention:
+```python
+def forward(self, text, text_lengths):
+  ...
+  packed_output, _ = self.rnn(packed_input)
+  padded_output, _ = pad_packed_sequence(packed_output)
+  attention_output, _ = self.attention(
+    padded_output, padded_output, padded_output
+  )
+  sentence_embedding = torch.mean(
+    attention_output, dim=0
+  )
+  ...
+```
+
+Maintainig hyperparameters from before and using only $1$ attention head the model #link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/runs/j6t300g6?nw=nwusercrutch")[reached] accuracy of $85.32$% and $87.2$% on validation and test data, which is a slight increase compared to model form @gensim, but it still worse than model from @regularization. This could be possibly improved with further hyperparameter tuning.
+
 
 = Architecture Optimization
-Experiment with more complex RNN architectures (GRU, LSTM, Bidirectional simple RNN, simple RNN with 2 hidden layers) and report accuracy on the validation set.
+#text(gray)[The original code base uses the most simple RNN architecture. Now consider more complex architectures in the following. Run experiments by replacing the original RNN with each of the following architectures. Report the accuracy on the validation set and compare these results. Discuss your findings.]
+
+=== GRU with a single hidden layer
+=== LSTM with a single hidden layer
+=== Bidirectional simple RNN with a single hidden layer (consisting of a forward pass and a backward pass)
+=== Simple RNN with 2 hidden layers]
+
 
 = Critical Thinking
 Propose and implement a modification to further improve performance. Conduct experiments and report accuracy on the validation set.

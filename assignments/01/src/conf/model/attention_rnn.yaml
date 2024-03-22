@@ -1,0 +1,2 @@
+_target_: models.rnn.AttentionGensimPackedRNN
+n_heads: 1
