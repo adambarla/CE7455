@@ -1,3 +1,4 @@
+import hydra
 import torch
 import gensim.downloader
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -59,7 +60,7 @@ class GensimPackedRNN(nn.Module):
         output_dim,
         TEXT,
         dropout=0,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         word_vectors = gensim.downloader.load("word2vec-google-news-300")
@@ -87,16 +88,21 @@ class AttentionGensimPackedRNN(nn.Module):
         hidden_dim,
         output_dim,
         TEXT,
+        base,
         dropout=0,
         n_heads=1,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         word_vectors = gensim.downloader.load("word2vec-google-news-300")
         embedding_matrix = get_embedding_matrix(TEXT, word_vectors)
         self.embedding = nn.Embedding.from_pretrained(embedding_matrix)
         # dropout in nn.RNN is not applied oh hidden state only on outputs of all layers except the last layer
-        self.rnn = nn.RNN(300, hidden_dim, dropout=dropout)
+        # instantiate base RNN class
+        self.base = base
+        if base.bidirectional:
+            hidden_dim = hidden_dim * 2
+        # self.rnn = nn.RNN(300, hidden_dim, dropout=dropout)
         self.attention = nn.MultiheadAttention(hidden_dim, n_heads)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim, output_dim)
@@ -105,7 +111,7 @@ class AttentionGensimPackedRNN(nn.Module):
         # assert is_sorted(text_lengths)
         embedded = self.embedding(text)
         packed_input = pack_padded_sequence(embedded, text_lengths)
-        packed_output, _ = self.rnn(packed_input)
+        packed_output, _ = self.base(packed_input)
         padded_output, _ = pad_packed_sequence(packed_output)
         attention_output, _ = self.attention(
             padded_output, padded_output, padded_output

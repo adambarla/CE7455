@@ -73,7 +73,7 @@ Learning rate may vary in the future but a good value for this configuration see
 
 === Dropout
 During training, randomly zeroes some of the elements of the input tensor with probability $p$ given by a parameter, which greatly reduces overfitting.
-This has proven to be an effective technique for regularization and preventing the co-adaptation of neurons as described in the #cite("dropout").
+This has proven to be an effective technique for regularization and preventing the co-adaptation of neurons as described in the @dropout.
 Dropout has an effect of training and using an ensamble of models and promotes learning of a sparse representation.
 
 
@@ -186,14 +186,29 @@ Maintainig hyperparameters from before and using only $1$ attention head the mod
 
 
 = Architecture Optimization
-#text(gray)[The original code base uses the most simple RNN architecture. Now consider more complex architectures in the following. Run experiments by replacing the original RNN with each of the following architectures. Report the accuracy on the validation set and compare these results. Discuss your findings.]
+#text(gray)[The original code base uses the most simple RNN architecture. Now consider more complex architectures in the following.
+- GRU with a single hidden layer
+- LSTM with a single hidden layer
+- Bidirectional simple RNN with a single hidden layer
+- Simple RNN with 2 hidden layers
+Run experiments by replacing the original RNN with each of the following architectures. Report the accuracy on the validation set and compare these results. Discuss your findings.]
 
-=== GRU with a single hidden layer
-=== LSTM with a single hidden layer
-=== Bidirectional simple RNN with a single hidden layer (consisting of a forward pass and a backward pass)
-=== Simple RNN with 2 hidden layers]
+I implemented changing of base method throught hydra configs. My results were as follows:
 
-
+#align(center)[
+#table(
+  columns: (auto, auto, auto),
+  inset: 5pt,
+  align: (left, horizon)l,
+  table.header(
+    [], [*validation\ accuracy*], [*test\ accuracy*],
+  ),
+  link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/runs/y7z31q9v?nw=nwusercrutch")[*GRU*],[$85.688$%],[$87.8$%],
+  link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/runs/3a9dwl83?nw=nwusercrutch")[*LSTM*],[$86.514$%],[$88$%],
+  link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/runs/hzrczr8w?nw=nwusercrutch")[*RNN* two layers],[$bold(86.605)$%],[$88.4$%],
+  link("https://wandb.ai/crutch/Deep%20Learning%20models%20for%20Sentence%20Classification/runs/fqra37ic?nw=nwusercrutch")[*RNN* bidirectional],[$86.330$%],[$bold(90)$%]
+)
+]
 = Critical Thinking
 Propose and implement a modification to further improve performance. Conduct experiments and report accuracy on the validation set.
   

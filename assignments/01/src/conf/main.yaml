@@ -3,7 +3,7 @@ defaults:
   - model: packed_rnn
   - optimizer: adam
   - regularizer: l2
-
+  - base: rnn
 model:
   embedding_dim: 100
   hidden_dim: 200

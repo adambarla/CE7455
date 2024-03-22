@@ -120,8 +120,14 @@ def main(cfg: DictConfig):
         sort_within_batch=True,
         device=device,
     )
+    base = hydra.utils.instantiate(cfg.base)
+    print(base)
     model = hydra.utils.instantiate(
-        cfg.model, vocab_size=len(TEXT.vocab), output_dim=len(LABEL.vocab), TEXT=TEXT
+        cfg.model,
+        vocab_size=len(TEXT.vocab),
+        output_dim=len(LABEL.vocab),
+        TEXT=TEXT,
+        base=base,
     )
     print(model)
     model.to(device)
