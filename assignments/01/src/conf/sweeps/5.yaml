@@ -1,0 +1,41 @@
+program: training.py
+name: 5_expanded_classifier
+entity: crutch
+project: "Deep Learning models for Sentence Classification"
+method: bayes
+run_cap: 200
+metric:
+    goal: maximize
+    name: valid_acc
+early_terminate:
+    type: hyperband
+    min_iter: 10
+    eta: 1
+parameters:
+    lr:
+        min: 0.00001
+        max: 0.001
+    dropout:
+        min: 0.0
+        max: 0.5
+    classifier.hidden_dims:
+        values: [[], [200], [200, 200]]
+    base.num_layers:
+        values: [1, 2, 3]
+    base.bidirectional:
+        values: [true, false]
+    base:
+        values: [rnn, lstm, gru]
+command:
+    - ${env}
+    - python3
+    - ${program}
+    - model=attention_rnn
+    - classifier=fc
+    - base=rnn
+    - base.num_layers=2
+    - base.bidirectional=false
+    - regularizer=l2
+    - patience=10
+    - model.hidden_dim=200
+    - ${args_no_hyphens}

@@ -4,6 +4,7 @@ defaults:
   - optimizer: adam
   - regularizer: l2
   - base: rnn
+  - classifier: fc
 model:
   embedding_dim: 100
   hidden_dim: 200
@@ -12,6 +13,18 @@ model:
 regularizer:
   alpha: 0.0006332825849228081
   use: false
+
+base:
+  input_size: ${model.embedding_dim}
+  hidden_size: ${model.hidden_dim}
+  dropout: ${model.dropout}
+  num_layers: 1
+  bidirectional: false
+
+classifier:
+  input_dim: ${model.hidden_dim}
+  hidden_dims: []
+  dropout: ${model.dropout}
 
 batch_size: 32
 lr: 0.0008726644867850513

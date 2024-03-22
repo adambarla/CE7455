@@ -1,6 +1,2 @@
 _target_: torch.nn.GRU
-input_size: 300
-hidden_size: ${model.hidden_dim}
-dropout: ${model.dropout}
-num_layers: 1
-bidirectional: false
+

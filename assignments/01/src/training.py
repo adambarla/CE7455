@@ -122,12 +122,20 @@ def main(cfg: DictConfig):
     )
     base = hydra.utils.instantiate(cfg.base)
     print(base)
+    if base.bidirectional:
+        cfg.classifier.input_dim = base.hidden_size * 2
+    classifier = hydra.utils.instantiate(
+        cfg.classifier,
+        output_dim=len(LABEL.vocab),
+    )
+    print(classifier)
     model = hydra.utils.instantiate(
         cfg.model,
         vocab_size=len(TEXT.vocab),
         output_dim=len(LABEL.vocab),
         TEXT=TEXT,
         base=base,
+        classifier=classifier,
     )
     print(model)
     model.to(device)

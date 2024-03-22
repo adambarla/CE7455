@@ -1,2 +1,3 @@
 _target_: models.rnn.AttentionGensimPackedRNN
 n_heads: 1
+embedding_dim: 300

@@ -6,6 +6,30 @@ import torch.nn as nn
 from utils import is_sorted, get_embedding_matrix
 
 
+class FC(nn.Module):
+    def __init__(self, input_dim, hidden_dims, output_dim, dropout, **kwargs):
+        super().__init__()
+        hidden_dims = [input_dim] + hidden_dims
+        self.layers = nn.Sequential(
+            *[
+                self._block(hidden_dims[i], hidden_dims[i + 1], dropout)
+                for i in range(len(hidden_dims) - 1)
+            ],
+            nn.Linear(hidden_dims[-1], output_dim),
+        )
+
+    def _block(self, input_dim, output_dim, dropout):
+        return nn.Sequential(
+            nn.Linear(input_dim, output_dim),
+            nn.BatchNorm1d(output_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
 class RNN(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim, **kwargs):
         super().__init__()
@@ -89,6 +113,7 @@ class AttentionGensimPackedRNN(nn.Module):
         output_dim,
         TEXT,
         base,
+        classifier,
         dropout=0,
         n_heads=1,
         **kwargs,
@@ -105,7 +130,8 @@ class AttentionGensimPackedRNN(nn.Module):
         # self.rnn = nn.RNN(300, hidden_dim, dropout=dropout)
         self.attention = nn.MultiheadAttention(hidden_dim, n_heads)
         self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        # self.fc = nn.Linear(hidden_dim, output_dim)
+        self.classifier = classifier
 
     def forward(self, text, text_lengths):
         # assert is_sorted(text_lengths)
@@ -118,4 +144,4 @@ class AttentionGensimPackedRNN(nn.Module):
         )
         sentence_embedding = torch.mean(attention_output, dim=0)
         sentence_embedding = self.dropout(sentence_embedding)
-        return self.fc(sentence_embedding.squeeze(0))
+        return self.classifier(sentence_embedding.squeeze(0))
