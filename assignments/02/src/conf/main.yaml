@@ -1,0 +1,37 @@
+defaults:
+    - _self_
+
+encoder:
+    _target_: model.rnn.Encoder
+    hidden_size: ${hidden_size}
+
+decoder:
+    _target_: model.rnn.Decoder
+    hidden_size: ${hidden_size}
+
+batch_size: 32
+lr: 1
+epochs: 5
+hidden_size: 512
+
+print_every: 5000
+teacher_forcing_ratio: 0.5
+plot_every: 100
+learning_rate: 0.01
+sos_token: 0
+eos_token: 1
+max_length: 15
+l1: fra
+l2: eng
+test_size: 0.1
+
+
+
+seed: 42
+device: null  # null means that the device will be selected automatically
+name: null  # null means that the name will be generated automatically
+group: null  # null means that the group will be generated automatically
+
+wandb:
+    entity: crutch
+    project: "Seq2Seq model for machine translation"
