@@ -22,7 +22,7 @@ optimizer:
     _target_: torch.optim.SGD
     lr: ${learning_rate}
 
-batch_size: 32
+batch_size: 1
 lr: 1
 epochs: 5
 hidden_size: 512

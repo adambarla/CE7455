@@ -50,28 +50,28 @@ class Seq2Seq(nn.Module):
                     break
         return decoder_outputs
 
-    def predict(self, x, max_len):
-        vocab_size = self.decoder.out.out_features
+    def predict(self, x):
+        input_length = x.size(0)
+        # vocab_size = self.decoder.out.out_features
         encoder_hidden = self.encoder.init_hidden()
         encoder_outputs = torch.zeros(
-            max_len, self.encoder.hidden_size, device=self.device
+            self.max_len, self.encoder.hidden_size, device=self.device
         )
-        for i in range(max_len):
+        for i in range(input_length):
             encoder_output, encoder_hidden = self.encoder(x[i], encoder_hidden)
             encoder_outputs[i] = encoder_output[0, 0]
-        decoder_input = torch.tensor([[0]], device=self.device)
+        decoder_input = torch.tensor([[self.sos_token]], device=self.device)
         decoder_hidden = encoder_hidden
-        decoded_words = []
-        for i in range(max_len):
+        outputs = []
+        for i in range(self.max_len):
             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
             top_v, top_i = decoder_output.topk(1)
-            if top_i.item() == 1:
-                decoded_words.append("<EOS>")
+            if top_i.item() == self.eos_token:
+                outputs.append("<EOS>")
                 break
-            else:
-                decoded_words.append(top_i.item())
+            outputs.append(top_i.item())
             decoder_input = top_i.squeeze().detach()
-        return decoded_words
+        return outputs
 
 
 class Encoder(nn.Module):

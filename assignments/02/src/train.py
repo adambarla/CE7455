@@ -1,4 +1,3 @@
-import random
 import time
 
 import numpy as np
@@ -7,26 +6,19 @@ from torch import nn
 from tqdm import tqdm
 import hydra
 from omegaconf import OmegaConf, DictConfig
-import torch
 from utils import (
     load_data,
     set_deterministic,
     init_run,
     get_device,
-    tensors_from_pair,
     time_since,
-    tensor_from_sentence,
 )
 
 
 def train_iters(
     model,
     epochs,
-    train_pairs,
-    input_lang,
-    output_lang,
-    device,
-    eos_token,
+    loader,
     print_every,
     criterion,
     optimizer,
@@ -35,16 +27,13 @@ def train_iters(
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     i = 1
-    n_iters = len(train_pairs) * epochs
+    n_iters = len(loader) * epochs
     for epoch in range(epochs):
         print("Epoch: %d/%d" % (epoch, epochs))
-        for training_pair in tqdm(train_pairs):
+        for inputs, targets in tqdm(loader):
+            inputs = inputs[0]
+            targets = targets[0]
             optimizer.zero_grad()
-            training_pair = tensors_from_pair(
-                training_pair, input_lang, output_lang, device, eos_token
-            )
-            inputs = training_pair[0]
-            targets = training_pair[1]
             outputs = model(inputs, targets)
             loss = criterion(outputs, targets.squeeze())
             loss.backward()
@@ -65,87 +54,32 @@ def train_iters(
             i += 1
 
 
-def evaluate(
-    encoder,
-    decoder,
-    sentence,
-    max_length,
-    device,
-    input_lang,
-    output_lang,
-    sos_token,
-    eos_token,
-):
-    encoder.eval()
-    decoder.eval()
-    with torch.no_grad():
-        input_tensor = tensor_from_sentence(input_lang, sentence, device, eos_token)
-        input_length = input_tensor.size()[0]
-        encoder_hidden = encoder.init_hidden()
-        encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
-            encoder_outputs[ei] += encoder_output[0, 0]
-        decoder_input = torch.tensor([[sos_token]], device=device)  # SOS
-        decoder_hidden = encoder_hidden
-        decoded_words = []
-        for di in range(max_length):
-            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
-            top_v, top_i = decoder_output.data.topk(1)
-            if top_i.item() == eos_token:
-                decoded_words.append("<EOS>")
-                break
-            else:
-                decoded_words.append(output_lang.index2word[top_i.item()])
-            decoder_input = top_i.squeeze().detach()
-        return decoded_words
-
-
 def evaluate_randomly(
-    encoder,
-    decoder,
+    model,
     input_lang,
     output_lang,
-    pairs,
-    device,
-    max_length,
-    sos_token,
-    eos_token,
+    loader,
     n=10,
 ):
-    for i in range(n):
-        pair = random.choice(pairs)
-        print(">", pair[0])
-        print("=", pair[1])
-        output_words = evaluate(
-            encoder,
-            decoder,
-            pair[0],
-            max_length,
-            device,
-            input_lang,
-            output_lang,
-            sos_token,
-            eos_token,
-        )
-        output_sentence = " ".join(output_words)
-        print("<", output_sentence)
+    for i, (inputs, targets) in enumerate(loader):
+        if i >= n:
+            break
+        inputs = inputs[0]
+        targets = targets[0]
+        print(">", input_lang.decode(inputs))
+        print("=", output_lang.decode(targets))
+        outputs = model.predict(inputs)
+        print("<", output_lang.decode(outputs))
         print("")
 
 
 def test(
-    encoder,
-    decoder,
-    input_lang,
+    model,
     output_lang,
-    testing_pairs,
-    max_length,
-    device,
-    sos_token,
-    eos_token,
+    loader,
 ):
     rouge = torchmetrics.text.rouge.ROUGEScore()  # todo: refactor
-    inputs = []
+    all_inputs = []
     gt = []
     predict = []
     metric_score = {
@@ -156,25 +90,16 @@ def test(
         "rouge2_precision": [],
         "rouge2_recall": [],
     }
-    for i in tqdm(range(len(testing_pairs))):
-        pair = testing_pairs[i]
-        output_words = evaluate(
-            encoder,
-            decoder,
-            pair[0],
-            max_length,
-            device,
-            input_lang,
-            output_lang,
-            sos_token,
-            eos_token,
-        )
-        output_sentence = " ".join(output_words)
-        inputs.append(pair[0])
-        gt.append(pair[1])
+    for i, (inputs, targets) in tqdm(enumerate(loader)):
+        inputs = inputs[0]
+        targets = targets[0]
+        outputs = model.predict(inputs)
+        output_sentence = output_lang.decode(outputs)
+        all_inputs.append(inputs)
+        gt.append(targets)
         predict.append(output_sentence)
         try:
-            rs = rouge(output_sentence, pair[1])
+            rs = rouge(output_sentence, targets)
         except:
             continue
         metric_score["rouge1_fmeasure"].append(rs["rouge1_fmeasure"])
@@ -197,7 +122,7 @@ def test(
     print("Rouge2 precision:\t", metric_score["rouge2_precision"])
     print("Rouge2 recall:  \t", metric_score["rouge2_recall"])
     print("=====================================")
-    return inputs, gt, predict, metric_score
+    return all_inputs, gt, predict, metric_score
 
 
 @hydra.main(config_path="conf", config_name="main", version_base=None)
@@ -206,7 +131,7 @@ def main(cfg: DictConfig):
     init_run(cfg)
     set_deterministic(cfg.seed)
     device = get_device(cfg)
-    train_pairs, test_pairs, input_lang, output_lang = load_data(
+    train_loader, test_loader, input_lang, output_lang = load_data(
         cfg.seed,
         cfg.l1,
         cfg.l2,
@@ -214,6 +139,8 @@ def main(cfg: DictConfig):
         cfg.sos_token,
         cfg.eos_token,
         cfg.max_length,
+        device,
+        cfg.batch_size,
     )
     encoder = hydra.utils.instantiate(
         cfg.encoder, input_size=input_lang.n_words, device=device
@@ -224,55 +151,33 @@ def main(cfg: DictConfig):
         device=device,
     ).to(device)
     model = hydra.utils.instantiate(
-        cfg.model, encoder=encoder, decoder=decoder, device=device
+        cfg.model,
+        encoder=encoder,
+        decoder=decoder,
+        device=device,
     )
     criterion = nn.NLLLoss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters())
     train_iters(
         model,
         epochs=cfg.epochs,
-        train_pairs=train_pairs,
-        input_lang=input_lang,
-        output_lang=output_lang,
-        device=device,
-        eos_token=cfg.eos_token,
+        loader=train_loader,
         print_every=cfg.print_every,
         criterion=criterion,
         optimizer=optimizer,
     )
     evaluate_randomly(
-        encoder,
-        decoder,
+        model,
         input_lang,
         output_lang,
-        test_pairs,
-        device,
-        cfg.max_length,
-        cfg.sos_token,
-        cfg.eos_token,
+        test_loader,
         n=10,
     )
+    test(model, output_lang, train_loader)
     test(
-        encoder,
-        decoder,
-        input_lang,
+        model,
         output_lang,
-        test_pairs,
-        cfg.max_length,
-        device,
-        cfg.sos_token,
-        cfg.eos_token,
-    )
-    test(
-        encoder,
-        decoder,
-        input_lang,
-        output_lang,
-        test_pairs,
-        cfg.max_length,
-        device,
-        cfg.sos_token,
-        cfg.eos_token,
+        test_loader,
     )
 
 

@@ -3,7 +3,9 @@ import unicodedata
 import zipfile
 from io import BytesIO
 import requests
+import torch
 from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Dataset
 
 
 def download_and_extract(lang1, lang2):
@@ -14,12 +16,48 @@ def download_and_extract(lang1, lang2):
     }
     r = requests.get(url, headers=headers)
     if r.status_code != 200:
-        raise Exception(f"Failed to download data, status code: {r.status_code}, url: {url}")
+        raise Exception(
+            f"Failed to download data, status code: {r.status_code}, url: {url}"
+        )
     z = zipfile.ZipFile(BytesIO(r.content))
     z.extractall(extract_to)
 
 
-def load_data(seed, lang1, lang2, test_size, sos_token_id, eos_token_id, max_length):
+class LangDataset(Dataset):
+    def __init__(self, pairs, input_lang, output_lang, device, eos_token):
+        self.pairs = pairs
+        self.input_lang = input_lang
+        self.output_lang = output_lang
+        self.device = device
+        self.eos_token = eos_token
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        inputs, targets = self.pairs[idx]
+        input_tensor = self.tensor_from_sentence(self.input_lang, inputs)
+        target_tensor = self.tensor_from_sentence(self.output_lang, targets)
+        return input_tensor, target_tensor
+
+    def tensor_from_sentence(self, lang, sentence):
+        indexes = lang.encode(sentence)
+        indexes.append(self.eos_token)
+        tensor = torch.tensor(indexes, dtype=torch.long, device=self.device)
+        return tensor
+
+
+def load_data(
+    seed,
+    lang1,
+    lang2,
+    test_size,
+    sos_token_id,
+    eos_token_id,
+    max_length,
+    device,
+    batch_size,
+):
     download_and_extract(lang1, lang2)
     input_lang, output_lang, pairs = prepare_data(
         lang1, lang2, sos_token_id, eos_token_id, max_length, reverse=True
@@ -31,7 +69,17 @@ def load_data(seed, lang1, lang2, test_size, sos_token_id, eos_token_id, max_len
     )
     train_pairs = list(zip(X_train, y_train))
     test_pairs = list(zip(X_test, y_test))
-    return train_pairs, test_pairs, input_lang, output_lang
+    # return train_pairs, test_pairs, input_lang, output_lang
+    # make dataloaders
+    train_dataset = LangDataset(
+        train_pairs, input_lang, output_lang, device, eos_token_id
+    )
+    test_dataset = LangDataset(
+        test_pairs, input_lang, output_lang, device, eos_token_id
+    )
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    return train_loader, test_loader, input_lang, output_lang
 
 
 class Lang:
@@ -56,6 +104,12 @@ class Lang:
             self.n_words += 1
         else:
             self.word2count[word] += 1
+
+    def encode(self, sentence):
+        return [self.word2index[word] for word in sentence.split(" ")]
+
+    def decode(self, tensor):
+        return " ".join([self.index2word[i.item()] for i in tensor])
 
 
 def unicode_to_ascii(s):
