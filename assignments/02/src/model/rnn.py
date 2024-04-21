@@ -24,21 +24,20 @@ class Seq2Seq(nn.Module):
         self.eos_token = eos_token
 
     def forward(self, x, y):
-        input_length = x.size(0)
-        target_length = y.size(0)
-        # batch_size = y.size(1)
+        L_in = x.shape[0]
+        L_tg = y.shape[0]
         vocab_size = self.decoder.output_size
         encoder_hidden = self.encoder.init_hidden()
         encoder_outputs = torch.zeros(
             self.max_length, self.encoder.hidden_size, device=self.device
         )
-        for i in range(input_length):
+        for i in range(L_in):
             encoder_output, encoder_hidden = self.encoder(x[i], encoder_hidden)
             encoder_outputs[i] = encoder_output[0, 0]
         decoder_input = torch.tensor([[self.sos_token]], device=self.device)
         decoder_hidden = encoder_hidden
-        decoder_outputs = torch.zeros(target_length, vocab_size, device=self.device)
-        for i in range(target_length):
+        decoder_outputs = torch.zeros(L_tg, vocab_size, device=self.device)
+        for i in range(L_tg):
             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
             decoder_outputs[i] = decoder_output
             if torch.rand(1).item() < self.teacher_forcing_ratio:

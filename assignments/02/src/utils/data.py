@@ -52,6 +52,7 @@ def load_data(
     lang1,
     lang2,
     test_size,
+    val_size,
     sos_token_id,
     eos_token_id,
     max_length,
@@ -62,24 +63,27 @@ def load_data(
     input_lang, output_lang, pairs = prepare_data(
         lang1, lang2, sos_token_id, eos_token_id, max_length, reverse=True
     )
-    X = [i[0] for i in pairs]
+    x = [i[0] for i in pairs]
     y = [i[1] for i in pairs]
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=seed
+    assert val_size + test_size < 1
+    fraction = test_size + val_size
+    x_tr, x_tmp, y_tr, y_tmp = train_test_split(
+        x, y, test_size=fraction, random_state=seed
     )
-    train_pairs = list(zip(X_train, y_train))
-    test_pairs = list(zip(X_test, y_test))
-    # return train_pairs, test_pairs, input_lang, output_lang
-    # make dataloaders
-    train_dataset = LangDataset(
-        train_pairs, input_lang, output_lang, device, eos_token_id
+    fraction = test_size / (test_size + val_size)
+    x_va, x_te, y_va, y_te = train_test_split(
+        x_tmp, y_tmp, test_size=fraction, random_state=seed
     )
-    test_dataset = LangDataset(
-        test_pairs, input_lang, output_lang, device, eos_token_id
-    )
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    return train_loader, test_loader, input_lang, output_lang
+    tr_pairs = list(zip(x_tr, y_tr))
+    va_pairs = list(zip(x_va, y_va))
+    te_pairs = list(zip(x_te, y_te))
+    tr_dataset = LangDataset(tr_pairs, input_lang, output_lang, device, eos_token_id)
+    va_dataset = LangDataset(va_pairs, input_lang, output_lang, device, eos_token_id)
+    te_dataset = LangDataset(te_pairs, input_lang, output_lang, device, eos_token_id)
+    tr_loader = DataLoader(tr_dataset, batch_size=batch_size, shuffle=True)
+    va_loader = DataLoader(va_dataset, batch_size=batch_size, shuffle=False)
+    te_loader = DataLoader(te_dataset, batch_size=batch_size, shuffle=False)
+    return tr_loader, va_loader, te_loader, input_lang, output_lang
 
 
 class Lang:

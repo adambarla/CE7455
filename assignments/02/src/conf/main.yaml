@@ -44,8 +44,7 @@ max_length: 15
 l1: fra
 l2: eng
 test_size: 0.1
-
-
+val_size: 0.1
 
 seed: 42
 device: null  # null means that the device will be selected automatically

@@ -17,17 +17,19 @@ from utils import (
 def train_iters(
     model,
     epochs,
-    loader,
+    tr_loader,
+    va_loader,
     criterion,
     optimizer,
+    out_lang,
 ):
-    model.train()
     loss_sum = 0
     i = 1
     for epoch in range(epochs):
-        print("Epoch: %d/%d" % (epoch, epochs))
-        with tqdm(total=len(loader), desc="Training") as bar:
-            for inputs, targets in loader:
+        model.train()
+        print(f"Epoch: {epoch}/{epochs}")
+        with tqdm(total=len(tr_loader), desc="Training") as bar:
+            for inputs, targets in tr_loader:
                 inputs = inputs[0]
                 targets = targets[0]
                 optimizer.zero_grad()
@@ -40,6 +42,8 @@ def train_iters(
                 bar.set_postfix(loss=loss_sum / i)
                 bar.update(1)
                 i += 1
+        model.eval()
+        test(model, out_lang, va_loader, "validation")
 
 
 def evaluate_randomly(
@@ -114,7 +118,6 @@ def test(
     print("Rouge2 recall:  \t", metric_score["rouge2_recall"])
     print("=====================================")
     wandb.log({f"{name}_{k}": v for k, v in metric_score.items()})
-    return all_inputs, gt, predict, metric_score
 
 
 @hydra.main(config_path="conf", config_name="main", version_base=None)
@@ -123,11 +126,12 @@ def main(cfg: DictConfig):
     init_run(cfg)
     set_deterministic(cfg.seed)
     device = get_device(cfg)
-    train_loader, test_loader, input_lang, output_lang = load_data(
+    tr_loader, va_loader, te_loader, in_lang, out_lang = load_data(
         cfg.seed,
         cfg.l1,
         cfg.l2,
         cfg.test_size,
+        cfg.val_size,
         cfg.sos_token,
         cfg.eos_token,
         cfg.max_length,
@@ -135,11 +139,11 @@ def main(cfg: DictConfig):
         cfg.batch_size,
     )
     encoder = hydra.utils.instantiate(
-        cfg.encoder, input_size=input_lang.n_words, device=device
+        cfg.encoder, input_size=in_lang.n_words, device=device
     ).to(device)
     decoder = hydra.utils.instantiate(
         cfg.decoder,
-        output_size=output_lang.n_words,
+        output_size=out_lang.n_words,
         device=device,
     ).to(device)
     model = hydra.utils.instantiate(
@@ -147,28 +151,31 @@ def main(cfg: DictConfig):
         encoder=encoder,
         decoder=decoder,
         device=device,
-    )
+    ).to(device)
     criterion = nn.NLLLoss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters())
+    print(f"Model: {model}\nCriterion: {criterion}\nOptimizer: {optimizer}")
     train_iters(
         model,
         epochs=cfg.epochs,
-        loader=train_loader,
+        tr_loader=tr_loader,
+        va_loader=va_loader,
         criterion=criterion,
         optimizer=optimizer,
+        out_lang=out_lang,
     )
     evaluate_randomly(
         model,
-        input_lang,
-        output_lang,
-        test_loader,
+        in_lang,
+        out_lang,
+        te_loader,
         n=10,
     )
-    test(model, output_lang, train_loader, "train")
+    test(model, out_lang, tr_loader, "train")
     test(
         model,
-        output_lang,
-        test_loader,
+        out_lang,
+        te_loader,
         "test",
     )
 
