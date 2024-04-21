@@ -75,17 +75,17 @@ class Seq2Seq(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, input_size, hidden_size, device):
+    def __init__(self, input_size, hidden_size, base, device):
         super(Encoder, self).__init__()
         self.hidden_size = hidden_size
         self.device = device
         self.embedding = nn.Embedding(input_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.base = base
 
     def forward(self, x, hidden):
         embedded = self.embedding(x).view(1, 1, -1)
         output = embedded
-        output, hidden = self.gru(output, hidden)
+        output, hidden = self.base(output, hidden)
         return output, hidden
 
     def init_hidden(self):
