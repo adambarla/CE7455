@@ -55,7 +55,7 @@ class Seq2Seq(nn.Module):
         # vocab_size = self.decoder.out.out_features
         encoder_hidden = self.encoder.init_hidden()
         encoder_outputs = torch.zeros(
-            self.max_len, self.encoder.hidden_size, device=self.device
+            self.max_length, self.encoder.hidden_size, device=self.device
         )
         for i in range(input_length):
             encoder_output, encoder_hidden = self.encoder(x[i], encoder_hidden)
@@ -63,11 +63,11 @@ class Seq2Seq(nn.Module):
         decoder_input = torch.tensor([[self.sos_token]], device=self.device)
         decoder_hidden = encoder_hidden
         outputs = []
-        for i in range(self.max_len):
+        for i in range(self.max_length):
             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
             top_v, top_i = decoder_output.topk(1)
             if top_i.item() == self.eos_token:
-                outputs.append("<EOS>")
+                outputs.append("<eos>")
                 break
             outputs.append(top_i.item())
             decoder_input = top_i.squeeze().detach()
