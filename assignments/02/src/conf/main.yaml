@@ -27,7 +27,7 @@ decoder:
 
 optimizer:
     _target_: torch.optim.SGD
-    lr: ${learning_rate}
+    lr: ${lr}
 
 early_stopping:
     _target_: utils.patience.Patience
@@ -43,7 +43,6 @@ hidden_size: 512
 print_every: 5000
 teacher_forcing_ratio: 0.5
 plot_every: 100
-learning_rate: 0.01
 sos_token: 0
 eos_token: 1
 max_length: 15
