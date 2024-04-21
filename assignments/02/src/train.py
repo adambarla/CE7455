@@ -92,7 +92,7 @@ def test(
                 inputs = inputs[0]
                 targets = targets[0]
                 outputs = model.predict(inputs)
-                loss = criterion(outputs, targets.squeeze())
+                loss = criterion(model(inputs, targets), targets.squeeze())
                 loss_sum += loss.item()
                 output_sentence = output_lang.decode(outputs)
                 target_sentence = output_lang.decode(targets)
