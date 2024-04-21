@@ -43,7 +43,7 @@ def train_iters(
                 bar.update(1)
                 i += 1
         model.eval()
-        test(model, out_lang, va_loader, "validation")
+        test(model, out_lang, va_loader, criterion, "valid")
 
 
 def evaluate_randomly(
@@ -69,6 +69,7 @@ def test(
     model,
     output_lang,
     loader,
+    criterion,
     name,
 ):
     model.eval()
@@ -84,12 +85,15 @@ def test(
         "rouge2_precision": [],
         "rouge2_recall": [],
     }
+    loss_sum = 0
     with torch.no_grad():
         with tqdm(total=len(loader), desc=f"Testing {name} partion") as bar:
             for i, (inputs, targets) in enumerate(loader):
                 inputs = inputs[0]
                 targets = targets[0]
                 outputs = model.predict(inputs)
+                loss = criterion(outputs, targets.squeeze())
+                loss_sum += loss.item()
                 output_sentence = output_lang.decode(outputs)
                 target_sentence = output_lang.decode(targets)
                 all_inputs.append(inputs)
@@ -103,6 +107,8 @@ def test(
                 metric_score["rouge2_precision"].append(rs["rouge2_precision"])
                 metric_score["rouge2_recall"].append(rs["rouge2_recall"])
                 bar.update(1)
+                bar.set_postfix(loss=loss_sum / (i + 1))
+    metric_score["loss"] = loss_sum / len(loader)
     metric_score["rouge1_fmeasure"] = np.array(metric_score["rouge1_fmeasure"]).mean()
     metric_score["rouge1_precision"] = np.array(metric_score["rouge1_precision"]).mean()
     metric_score["rouge1_recall"] = np.array(metric_score["rouge1_recall"]).mean()
@@ -171,11 +177,12 @@ def main(cfg: DictConfig):
         te_loader,
         n=10,
     )
-    test(model, out_lang, tr_loader, "train")
+    test(model, out_lang, tr_loader, criterion, "train")
     test(
         model,
         out_lang,
         te_loader,
+        criterion,
         "test",
     )
 
