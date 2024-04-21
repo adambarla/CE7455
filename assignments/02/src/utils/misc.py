@@ -21,12 +21,13 @@ def get_device(cfg: DictConfig) -> torch.device:
 
 
 def init_run(cfg):
+    b = cfg.base._target_.split(".")[-1]
+    m = cfg.model._target_.split(".")[-1]
+    t = datetime.now().strftime("%Y%m%d_%H%M%S")
     if cfg.name is None:
-        # m = cfg.model._target_.split(".")[-1]
-        # o = cfg.optimizer._target_.split(".")[-1]
-        t = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # cfg.name = f"{m}_{o}_{t}"
-        cfg.name = f"{t}"
+        cfg.name = f"{b}_{m}_{t}"
+    if cfg.group is None:
+        cfg.group = f"{b}"
     wandb.init(
         name=cfg.name,
         group=cfg.group,
