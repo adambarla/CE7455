@@ -1,6 +1,15 @@
 defaults:
     - _self_
 
+model:
+    _target_: model.rnn.Seq2Seq
+    encoder: ${encoder}
+    decoder: ${decoder}
+    teacher_forcing_ratio: ${teacher_forcing_ratio}
+    max_length: ${max_length}
+    sos_token: ${sos_token}
+    eos_token: ${eos_token}
+
 encoder:
     _target_: model.rnn.Encoder
     hidden_size: ${hidden_size}
@@ -8,6 +17,10 @@ encoder:
 decoder:
     _target_: model.rnn.Decoder
     hidden_size: ${hidden_size}
+
+optimizer:
+    _target_: torch.optim.SGD
+    lr: ${learning_rate}
 
 batch_size: 32
 lr: 1
