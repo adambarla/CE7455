@@ -51,7 +51,7 @@ class Seq2Seq(nn.Module):
 
     def predict(self, x):
         input_length = x.size(0)
-        # vocab_size = self.decoder.out.out_features
+        vocab_size = self.decoder.output_size
         encoder_hidden = self.encoder.init_hidden()
         encoder_outputs = torch.zeros(
             self.max_length, self.encoder.hidden_size, device=self.device
@@ -61,16 +61,18 @@ class Seq2Seq(nn.Module):
             encoder_outputs[i] = encoder_output[0, 0]
         decoder_input = torch.tensor([[self.sos_token]], device=self.device)
         decoder_hidden = encoder_hidden
+        decoder_outputs = torch.zeros(self.max_length, vocab_size, device=self.device)
         outputs = []
         for i in range(self.max_length):
             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+            decoder_outputs[i] = decoder_output
             top_v, top_i = decoder_output.topk(1)
             if top_i.item() == self.eos_token:
                 outputs.append(self.eos_token)
                 break
             outputs.append(top_i.item())
             decoder_input = top_i.squeeze().detach()
-        return outputs
+        return outputs, decoder_outputs
 
 
 class Encoder(nn.Module):

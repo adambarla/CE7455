@@ -27,7 +27,9 @@ def train_iters(
     i = 1
     for epoch in range(epochs):
         model.train()
-        print(f"Epoch: {epoch}/{epochs}")
+        s = f"Epoch: {epoch:>{len(str(epochs))}}/{epochs}"
+        print("=" * len(s))
+        print(s)
         with tqdm(total=len(tr_loader), desc="Training") as bar:
             for inputs, targets in tr_loader:
                 inputs = inputs[0]
@@ -60,7 +62,7 @@ def evaluate_randomly(
         targets = targets[0]
         print(">", input_lang.decode(inputs))
         print("=", output_lang.decode(targets))
-        outputs = model.predict(inputs)
+        outputs, _ = model.predict(inputs)
         print("<", output_lang.decode(outputs))
         print("")
 
@@ -74,56 +76,32 @@ def test(
 ):
     model.eval()
     rouge = torchmetrics.text.rouge.ROUGEScore()  # todo: refactor
-    all_inputs = []
-    gt = []
-    predict = []
-    metric_score = {
-        "rouge1_fmeasure": [],
-        "rouge1_precision": [],
-        "rouge1_recall": [],
-        "rouge2_fmeasure": [],
-        "rouge2_precision": [],
-        "rouge2_recall": [],
-    }
+    hypothesis = []
+    references = []
     loss_sum = 0
     with torch.no_grad():
         with tqdm(total=len(loader), desc=f"Testing {name} partion") as bar:
             for i, (inputs, targets) in enumerate(loader):
                 inputs = inputs[0]
                 targets = targets[0]
-                outputs = model.predict(inputs)
-                loss = criterion(model(inputs, targets), targets.squeeze())
+                outputs, probs = model.predict(inputs)
+                loss = criterion(probs[:len(targets)], targets.squeeze())
                 loss_sum += loss.item()
                 output_sentence = output_lang.decode(outputs)
                 target_sentence = output_lang.decode(targets)
-                all_inputs.append(inputs)
-                gt.append(targets)
-                predict.append(output_sentence)
-                rs = rouge(output_sentence, target_sentence)
-                metric_score["rouge1_fmeasure"].append(rs["rouge1_fmeasure"])
-                metric_score["rouge1_precision"].append(rs["rouge1_precision"])
-                metric_score["rouge1_recall"].append(rs["rouge1_recall"])
-                metric_score["rouge2_fmeasure"].append(rs["rouge2_fmeasure"])
-                metric_score["rouge2_precision"].append(rs["rouge2_precision"])
-                metric_score["rouge2_recall"].append(rs["rouge2_recall"])
+                hypothesis.append(output_sentence)
+                references.append([target_sentence])
                 bar.update(1)
                 bar.set_postfix(loss=loss_sum / (i + 1))
-    metric_score["loss"] = loss_sum / len(loader)
-    metric_score["rouge1_fmeasure"] = np.array(metric_score["rouge1_fmeasure"]).mean()
-    metric_score["rouge1_precision"] = np.array(metric_score["rouge1_precision"]).mean()
-    metric_score["rouge1_recall"] = np.array(metric_score["rouge1_recall"]).mean()
-    metric_score["rouge2_fmeasure"] = np.array(metric_score["rouge2_fmeasure"]).mean()
-    metric_score["rouge2_precision"] = np.array(metric_score["rouge2_precision"]).mean()
-    metric_score["rouge2_recall"] = np.array(metric_score["rouge2_recall"]).mean()
-    print("=== Evaluation score - Rouge score ===")
-    print("Rouge1 fmeasure:\t", metric_score["rouge1_fmeasure"])
-    print("Rouge1 precision:\t", metric_score["rouge1_precision"])
-    print("Rouge1 recall:  \t", metric_score["rouge1_recall"])
-    print("Rouge2 fmeasure:\t", metric_score["rouge2_fmeasure"])
-    print("Rouge2 precision:\t", metric_score["rouge2_precision"])
-    print("Rouge2 recall:  \t", metric_score["rouge2_recall"])
-    print("=====================================")
-    wandb.log({f"{name}_{k}": v for k, v in metric_score.items()})
+
+    rs = rouge(hypothesis, references)
+    metrics = {k: v.item() for k, v in rs.items()}
+    metrics["loss"] = loss_sum / len(loader)
+    longest_name = max(len(k) for k in metrics.keys())
+    for k, v in metrics.items():
+        print(f"{k:>{longest_name}}: {v:.4g}")
+    wandb.log({f"{name}_{k}": v for k, v in metrics.items()})
+    return metrics
 
 
 @hydra.main(config_path="conf", config_name="main", version_base=None)
