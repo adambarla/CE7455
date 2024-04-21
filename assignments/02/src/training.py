@@ -33,6 +33,8 @@ def train(
     eos_token,
     teacher_forcing_ratio=0.5,
 ):
+    encoder.train()
+    decoder.train()
     encoder_hidden = encoder.init_hidden()
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
@@ -80,13 +82,10 @@ def train_iters(
     sos_token,
     eos_token,
     print_every=1000,
-    plot_every=100,
     learning_rate=0.01,
 ):
     start = time.time()
-    plot_losses = []
     print_loss_total = 0  # Reset every print_every
-    plot_loss_total = 0  # Reset every plot_every
     encoder_optimizer = torch.optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = torch.optim.SGD(decoder.parameters(), lr=learning_rate)
     criterion = nn.NLLLoss()
@@ -115,7 +114,6 @@ def train_iters(
                 teacher_forcing_ratio=0.5,
             )
             print_loss_total += loss
-            plot_loss_total += loss
             if i % print_every == 0:
                 print_loss_avg = print_loss_total / print_every
                 print_loss_total = 0
@@ -142,6 +140,8 @@ def evaluate(
     sos_token,
     eos_token,
 ):
+    encoder.eval()
+    decoder.eval()
     with torch.no_grad():
         input_tensor = tensor_from_sentence(input_lang, sentence, device, eos_token)
         input_length = input_tensor.size()[0]
@@ -213,10 +213,10 @@ def test(
     gt = []
     predict = []
     metric_score = {
-        "rouge1_f_measure": [],
+        "rouge1_fmeasure": [],
         "rouge1_precision": [],
         "rouge1_recall": [],
-        "rouge2_f_measure": [],
+        "rouge2_fmeasure": [],
         "rouge2_precision": [],
         "rouge2_recall": [],
     }
@@ -241,23 +241,23 @@ def test(
             rs = rouge(output_sentence, pair[1])
         except:
             continue
-        metric_score["rouge1_f_measure"].append(rs["rouge1_f_measure"])
+        metric_score["rouge1_fmeasure"].append(rs["rouge1_fmeasure"])
         metric_score["rouge1_precision"].append(rs["rouge1_precision"])
         metric_score["rouge1_recall"].append(rs["rouge1_recall"])
-        metric_score["rouge2_f_measure"].append(rs["rouge2_f_measure"])
+        metric_score["rouge2_fmeasure"].append(rs["rouge2_fmeasure"])
         metric_score["rouge2_precision"].append(rs["rouge2_precision"])
         metric_score["rouge2_recall"].append(rs["rouge2_recall"])
-    metric_score["rouge1_f_measure"] = np.array(metric_score["rouge1_f_measure"]).mean()
+    metric_score["rouge1_fmeasure"] = np.array(metric_score["rouge1_fmeasure"]).mean()
     metric_score["rouge1_precision"] = np.array(metric_score["rouge1_precision"]).mean()
     metric_score["rouge1_recall"] = np.array(metric_score["rouge1_recall"]).mean()
-    metric_score["rouge2_f_measure"] = np.array(metric_score["rouge2_f_measure"]).mean()
+    metric_score["rouge2_fmeasure"] = np.array(metric_score["rouge2_fmeasure"]).mean()
     metric_score["rouge2_precision"] = np.array(metric_score["rouge2_precision"]).mean()
     metric_score["rouge2_recall"] = np.array(metric_score["rouge2_recall"]).mean()
     print("=== Evaluation score - Rouge score ===")
-    print("Rouge1 f_measure:\t", metric_score["rouge1_f_measure"])
+    print("Rouge1 fmeasure:\t", metric_score["rouge1_fmeasure"])
     print("Rouge1 precision:\t", metric_score["rouge1_precision"])
     print("Rouge1 recall:  \t", metric_score["rouge1_recall"])
-    print("Rouge2 f_measure:\t", metric_score["rouge2_f_measure"])
+    print("Rouge2 fmeasure:\t", metric_score["rouge2_fmeasure"])
     print("Rouge2 precision:\t", metric_score["rouge2_precision"])
     print("Rouge2 recall:  \t", metric_score["rouge2_recall"])
     print("=====================================")
@@ -299,7 +299,6 @@ def main(cfg: DictConfig):
         sos_token=cfg.sos_token,
         eos_token=cfg.eos_token,
         print_every=cfg.print_every,
-        plot_every=cfg.plot_every,
         learning_rate=cfg.lr,
     )
     evaluate_randomly(
