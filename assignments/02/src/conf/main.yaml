@@ -29,9 +29,15 @@ optimizer:
     _target_: torch.optim.SGD
     lr: ${learning_rate}
 
+early_stopping:
+    _target_: utils.patience.Patience
+    patience: 3
+    mode: min
+    metric: loss
+
 batch_size: 1
-lr: 1
-epochs: 5
+lr: 0.01
+epochs: 1000
 hidden_size: 512
 
 print_every: 5000

@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import torchmetrics
 import wandb
@@ -22,6 +21,7 @@ def train_iters(
     criterion,
     optimizer,
     out_lang,
+    early_stopping,
 ):
     loss_sum = 0
     i = 1
@@ -44,8 +44,11 @@ def train_iters(
                 bar.set_postfix(loss=loss_sum / i)
                 bar.update(1)
                 i += 1
-        model.eval()
-        test(model, out_lang, va_loader, criterion, "valid")
+            bar.close()
+        metrics = test(model, out_lang, va_loader, criterion, "valid")
+        if early_stopping.should_stop(metrics):
+            print(f"Early stopping triggered in epoch {epoch + 1}")
+            break
 
 
 def evaluate_randomly(
@@ -85,7 +88,7 @@ def test(
                 inputs = inputs[0]
                 targets = targets[0]
                 outputs, probs = model.predict(inputs)
-                loss = criterion(probs[:len(targets)], targets.squeeze())
+                loss = criterion(probs[: len(targets)], targets.squeeze())
                 loss_sum += loss.item()
                 output_sentence = output_lang.decode(outputs)
                 target_sentence = output_lang.decode(targets)
@@ -93,7 +96,7 @@ def test(
                 references.append([target_sentence])
                 bar.update(1)
                 bar.set_postfix(loss=loss_sum / (i + 1))
-
+            bar.close()
     rs = rouge(hypothesis, references)
     metrics = {k: v.item() for k, v in rs.items()}
     metrics["loss"] = loss_sum / len(loader)
@@ -139,6 +142,7 @@ def main(cfg: DictConfig):
     criterion = nn.NLLLoss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters())
     print(f"Model: {model}\nCriterion: {criterion}\nOptimizer: {optimizer}")
+    early_stopping = hydra.utils.instantiate(cfg.early_stopping)
     train_iters(
         model,
         epochs=cfg.epochs,
@@ -147,6 +151,7 @@ def main(cfg: DictConfig):
         criterion=criterion,
         optimizer=optimizer,
         out_lang=out_lang,
+        early_stopping=early_stopping,
     )
     evaluate_randomly(
         model,
