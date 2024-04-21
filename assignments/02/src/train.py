@@ -1,7 +1,7 @@
-import time
-
 import numpy as np
+import torch
 import torchmetrics
+import wandb
 from torch import nn
 from tqdm import tqdm
 import hydra
@@ -11,7 +11,6 @@ from utils import (
     set_deterministic,
     init_run,
     get_device,
-    time_since,
 )
 
 
@@ -19,39 +18,28 @@ def train_iters(
     model,
     epochs,
     loader,
-    print_every,
     criterion,
     optimizer,
 ):
     model.train()
-    start = time.time()
-    print_loss_total = 0  # Reset every print_every
+    loss_sum = 0
     i = 1
-    n_iters = len(loader) * epochs
     for epoch in range(epochs):
         print("Epoch: %d/%d" % (epoch, epochs))
-        for inputs, targets in tqdm(loader):
-            inputs = inputs[0]
-            targets = targets[0]
-            optimizer.zero_grad()
-            outputs = model(inputs, targets)
-            loss = criterion(outputs, targets.squeeze())
-            loss.backward()
-            optimizer.step()
-            print_loss_total += loss.item()
-            if i % print_every == 0:
-                print_loss_avg = print_loss_total / print_every
-                print_loss_total = 0
-                print(
-                    "%s (%d %d%%) %.4f"
-                    % (
-                        time_since(start, i / n_iters),
-                        i,
-                        i / n_iters * 100,
-                        print_loss_avg,
-                    )
-                )
-            i += 1
+        with tqdm(total=len(loader), desc="Training") as bar:
+            for inputs, targets in loader:
+                inputs = inputs[0]
+                targets = targets[0]
+                optimizer.zero_grad()
+                outputs = model(inputs, targets)
+                loss = criterion(outputs, targets.squeeze())
+                loss.backward()
+                optimizer.step()
+                loss_sum += loss.item()
+                wandb.log({"train_loss": loss_sum / i})
+                bar.set_postfix(loss=loss_sum / i)
+                bar.update(1)
+                i += 1
 
 
 def evaluate_randomly(
@@ -77,7 +65,9 @@ def test(
     model,
     output_lang,
     loader,
+    name,
 ):
+    model.eval()
     rouge = torchmetrics.text.rouge.ROUGEScore()  # todo: refactor
     all_inputs = []
     gt = []
@@ -90,24 +80,25 @@ def test(
         "rouge2_precision": [],
         "rouge2_recall": [],
     }
-    for i, (inputs, targets) in tqdm(enumerate(loader)):
-        inputs = inputs[0]
-        targets = targets[0]
-        outputs = model.predict(inputs)
-        output_sentence = output_lang.decode(outputs)
-        all_inputs.append(inputs)
-        gt.append(targets)
-        predict.append(output_sentence)
-        try:
-            rs = rouge(output_sentence, targets)
-        except:
-            continue
-        metric_score["rouge1_fmeasure"].append(rs["rouge1_fmeasure"])
-        metric_score["rouge1_precision"].append(rs["rouge1_precision"])
-        metric_score["rouge1_recall"].append(rs["rouge1_recall"])
-        metric_score["rouge2_fmeasure"].append(rs["rouge2_fmeasure"])
-        metric_score["rouge2_precision"].append(rs["rouge2_precision"])
-        metric_score["rouge2_recall"].append(rs["rouge2_recall"])
+    with torch.no_grad():
+        with tqdm(total=len(loader), desc=f"Testing {name} partion") as bar:
+            for i, (inputs, targets) in enumerate(loader):
+                inputs = inputs[0]
+                targets = targets[0]
+                outputs = model.predict(inputs)
+                output_sentence = output_lang.decode(outputs)
+                target_sentence = output_lang.decode(targets)
+                all_inputs.append(inputs)
+                gt.append(targets)
+                predict.append(output_sentence)
+                rs = rouge(output_sentence, target_sentence)
+                metric_score["rouge1_fmeasure"].append(rs["rouge1_fmeasure"])
+                metric_score["rouge1_precision"].append(rs["rouge1_precision"])
+                metric_score["rouge1_recall"].append(rs["rouge1_recall"])
+                metric_score["rouge2_fmeasure"].append(rs["rouge2_fmeasure"])
+                metric_score["rouge2_precision"].append(rs["rouge2_precision"])
+                metric_score["rouge2_recall"].append(rs["rouge2_recall"])
+                bar.update(1)
     metric_score["rouge1_fmeasure"] = np.array(metric_score["rouge1_fmeasure"]).mean()
     metric_score["rouge1_precision"] = np.array(metric_score["rouge1_precision"]).mean()
     metric_score["rouge1_recall"] = np.array(metric_score["rouge1_recall"]).mean()
@@ -122,6 +113,7 @@ def test(
     print("Rouge2 precision:\t", metric_score["rouge2_precision"])
     print("Rouge2 recall:  \t", metric_score["rouge2_recall"])
     print("=====================================")
+    wandb.log({f"{name}_{k}": v for k, v in metric_score.items()})
     return all_inputs, gt, predict, metric_score
 
 
@@ -158,11 +150,11 @@ def main(cfg: DictConfig):
     )
     criterion = nn.NLLLoss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters())
+    test(model, output_lang, test_loader, "test")
     train_iters(
         model,
         epochs=cfg.epochs,
         loader=train_loader,
-        print_every=cfg.print_every,
         criterion=criterion,
         optimizer=optimizer,
     )
@@ -173,11 +165,12 @@ def main(cfg: DictConfig):
         test_loader,
         n=10,
     )
-    test(model, output_lang, train_loader)
+    test(model, output_lang, train_loader, "train")
     test(
         model,
         output_lang,
         test_loader,
+        "test",
     )
 
 
