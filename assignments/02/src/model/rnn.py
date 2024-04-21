@@ -67,7 +67,7 @@ class Seq2Seq(nn.Module):
             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
             top_v, top_i = decoder_output.topk(1)
             if top_i.item() == self.eos_token:
-                outputs.append("<eos>")
+                outputs.append(self.eos_token)
                 break
             outputs.append(top_i.item())
             decoder_input = top_i.squeeze().detach()

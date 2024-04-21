@@ -150,7 +150,6 @@ def main(cfg: DictConfig):
     )
     criterion = nn.NLLLoss()
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters())
-    test(model, output_lang, test_loader, "test")
     train_iters(
         model,
         epochs=cfg.epochs,
