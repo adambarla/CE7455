@@ -1,6 +1,7 @@
 defaults:
     - _self_
-    - base: gru
+    - encoder: gru
+    - decoder: gru
 
 model:
     _target_: model.rnn.Seq2Seq
@@ -10,20 +11,6 @@ model:
     max_length: ${max_length}
     sos_token: ${sos_token}
     eos_token: ${eos_token}
-
-base:
-    input_size: ${hidden_size}
-    hidden_size: ${hidden_size}
-    bidirectional: false
-
-encoder:
-    _target_: model.rnn.Encoder
-    hidden_size: ${hidden_size}
-    base: ${base}
-
-decoder:
-    _target_: model.rnn.Decoder
-    hidden_size: ${hidden_size}
 
 optimizer:
     _target_: torch.optim.SGD

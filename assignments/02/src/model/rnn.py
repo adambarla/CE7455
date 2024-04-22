@@ -35,7 +35,7 @@ class Seq2Seq(nn.Module):
             encoder_output, encoder_hidden = self.encoder(x[i], encoder_hidden)
             encoder_outputs[i] = encoder_output[0, 0]
         decoder_input = torch.tensor([[self.sos_token]], device=self.device)
-        decoder_hidden = encoder_hidden
+        decoder_hidden = self.decoder.init_hidden()
         decoder_outputs = torch.zeros(L_tg, vocab_size, device=self.device)
         for i in range(L_tg):
             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
@@ -60,7 +60,7 @@ class Seq2Seq(nn.Module):
             encoder_output, encoder_hidden = self.encoder(x[i], encoder_hidden)
             encoder_outputs[i] = encoder_output[0, 0]
         decoder_input = torch.tensor([[self.sos_token]], device=self.device)
-        decoder_hidden = encoder_hidden
+        decoder_hidden = self.decoder.init_hidden()
         decoder_outputs = torch.zeros(self.max_length, vocab_size, device=self.device)
         outputs = []
         for i in range(self.max_length):
@@ -90,17 +90,22 @@ class Encoder(nn.Module):
         return output, hidden
 
     def init_hidden(self):
+        if isinstance(self.base, nn.LSTM):
+            return (
+                torch.zeros(1, 1, self.hidden_size, device=self.device),
+                torch.zeros(1, 1, self.hidden_size, device=self.device),
+            )
         return torch.zeros(1, 1, self.hidden_size, device=self.device)
 
 
 class Decoder(nn.Module):
-    def __init__(self, hidden_size, output_size, device):
+    def __init__(self, hidden_size, output_size, base, device):
         super(Decoder, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.device = device
         self.embedding = nn.Embedding(output_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.base = base
         self.out = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
 
@@ -108,9 +113,14 @@ class Decoder(nn.Module):
         # todo: Your code here
         output = self.embedding(x).view(1, 1, -1)
         output = F.relu(output)
-        output, hidden = self.gru(output, hidden)  # L x H_out, 1 x H_out
+        output, hidden = self.base(output, hidden)  # L x H_out, 1 x H_out
         output = self.softmax(self.out(output[0]))
         return output, hidden
 
     def init_hidden(self):
+        if isinstance(self.base, nn.LSTM):
+            return (
+                torch.zeros(1, 1, self.hidden_size, device=self.device),
+                torch.zeros(1, 1, self.hidden_size, device=self.device),
+            )
         return torch.zeros(1, 1, self.hidden_size, device=self.device)

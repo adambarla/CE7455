@@ -1,0 +1,6 @@
+_target_: model.rnn.Decoder
+hidden_size: ${hidden_size}
+base:
+    _target_: torch.nn.GRU
+    input_size: ${hidden_size}
+    hidden_size: ${hidden_size}
