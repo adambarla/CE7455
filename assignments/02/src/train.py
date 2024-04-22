@@ -101,6 +101,9 @@ def test(
     metrics = {k: v.item() for k, v in rs.items()}
     metrics["loss"] = loss_sum / len(loader)
     longest_name = max(len(k) for k in metrics.keys())
+    s = f"Results for {name} partition"
+    print("-" * len(s))
+    print(s)
     for k, v in metrics.items():
         print(f"{k:>{longest_name}}: {v:.4g}")
     wandb.log({f"{name}_{k}": v for k, v in metrics.items()})
