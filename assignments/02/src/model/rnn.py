@@ -36,7 +36,7 @@ class Seq2Seq(nn.Module):
         )
         d_in = torch.full((1, B), self.sos_token, device=self.device, dtype=torch.long)
         for i in range(L - 1):
-            d_out_prob[i], d_hidden = self.decoder(d_in, d_hidden)
+            d_out_prob[i], d_hidden = self.decoder(d_in, d_hidden, e_out)
             _, top_i = d_out_prob[i].topk(1, dim=1)
             top_i = top_i.view(1, B)
             d_out_tok[i] = d_in
@@ -67,15 +67,14 @@ class Encoder(nn.Module):
         if self.base.__class__.__name__ == "LSTM":
             if self.bidirectional:
                 hidden = (
-                    hidden[0].transpose(1,0).reshape(1,B,-1),
-                    hidden[1].transpose(1,0).reshape(1,B,-1),
+                    hidden[0].transpose(1, 0).reshape(1, B, -1),
+                    hidden[1].transpose(1, 0).reshape(1, B, -1),
                 )
         return output, hidden
 
 
-
 class Decoder(nn.Module):
-    def __init__(self, hidden_size, output_size, base, device):
+    def __init__(self, hidden_size, output_size, base, device, use_attention=False):
         super(Decoder, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -86,12 +85,19 @@ class Decoder(nn.Module):
         torch.nn.init.xavier_uniform_(self.embedding.weight)
         torch.nn.init.xavier_uniform_(self.out.weight)
         self.out.bias.data.fill_(0)
+        self.use_attention = use_attention
 
-    def forward(self, x, hidden):
+    def forward(self, x, hidden, encoder_out=None):
         assert hidden is not None, "Hidden state is required for decoder"
-        L, B = x.shape
-        # todo: Your code here
-        embedded = self.embedding(x).view(L, B, -1)
+        L_de, B = x.shape # L_de is one here (due to teacher forcing)
+        embedded = self.embedding(x).view(L_de, B, -1)
+        if self.use_attention:
+            assert encoder_out is not None, "Encoder output is required for attention"
+            e_out_T = encoder_out.permute(1, 0, 2)  # B x L_en x H
+            emb_T = embedded.permute(1, 2, 0)  # B x H x 1
+            att_scores = torch.bmm(e_out_T, emb_T)  # B x L_en x 1
+            att_w = F.softmax(att_scores, dim=1).transpose(1, 2)  # B x 1 x L_en
+            embedded = torch.matmul(att_w, e_out_T).reshape(L_de, B, -1)
         output = F.relu(embedded)
         output, hidden = self.base(output, hidden)  # output is L x B x H
         output = self.out(output[0])

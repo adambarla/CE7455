@@ -13,6 +13,9 @@ model:
     eos_token: ${eos_token}
     pad_token: ${pad_token}
 
+decoder:
+    use_attention: false
+
 optimizer:
     _target_: torch.optim.SGD
     lr: ${lr}
