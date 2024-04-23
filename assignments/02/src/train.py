@@ -51,26 +51,6 @@ def train_iters(
             break
 
 
-def evaluate_randomly(
-    model,
-    input_lang,
-    output_lang,
-    loader,
-    n=10,
-):
-    n = min(n, len(loader))
-    inputs, targets = next(iter(loader))
-    sen_in = input_lang.decode(inputs.transpose(0, 1))
-    sen_tgt = output_lang.decode(targets.transpose(0, 1))
-    out_tok, out_prob = model(inputs, targets, use_teacher_forcing=False)
-    sen_out = output_lang.decode(out_tok.transpose(0, 1))
-    for i in range(n):
-        print(">", sen_in[i])
-        print("=", sen_tgt[i])
-        print("<", sen_out[i])
-        print("")
-
-
 def test(
     model,
     output_lang,
@@ -136,8 +116,9 @@ def main(cfg: DictConfig):
         device=device,
         hidden_size=encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1),
         base={
-            "hidden_size": encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1),
-            "input_size": encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1)
+            "hidden_size": encoder.hidden_size
+            * (2 if cfg.encoder.bidirectional else 1),
+            "input_size": encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1),
         },
     ).to(device)
     model = hydra.utils.instantiate(
@@ -161,21 +142,8 @@ def main(cfg: DictConfig):
         early_stopping=early_stopping,
         max_grad_norm=cfg.max_grad_norm,
     )
-    evaluate_randomly(
-        model,
-        in_lang,
-        out_lang,
-        te_loader,
-        n=10,
-    )
     test(model, out_lang, tr_loader, criterion, "train")
-    test(
-        model,
-        out_lang,
-        te_loader,
-        criterion,
-        "test",
-    )
+    test(model, out_lang, te_loader, criterion, "test")
 
 
 if __name__ == "__main__":
