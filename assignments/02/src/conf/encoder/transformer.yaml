@@ -1,0 +1,13 @@
+_target_: model.model.TransformerEncoder
+input_size: null # set to vocab_size
+hidden_size: ${hidden_size} # d_model
+dim_feedforward: 2048
+nhead: 8
+num_layers: 6
+pad_token: ${pad_token}
+dropout: ${dropout}
+pos_encoder:
+    _target_: model.utils.positional.PositionalEncoding
+    d_model: ${hidden_size}
+    dropout: ${dropout}
+    max_len: 5000

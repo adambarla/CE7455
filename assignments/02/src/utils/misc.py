@@ -21,12 +21,13 @@ def get_device(cfg: DictConfig) -> torch.device:
 
 
 def init_run(cfg):
-    e = cfg.encoder.base._target_.split(".")[-1]
-    d = cfg.decoder.base._target_.split(".")[-1]
+    e = cfg.encoder.base._target_.split(".")[-1] if cfg.encoder.get("base") else cfg.encoder._target_.split(".")[-1]
+    d = cfg.decoder.base._target_.split(".")[-1] if cfg.decoder.get("base") else cfg.decoder._target_.split(".")[-1]
     # m = cfg.model._target_.split(".")[-1]
     t = datetime.now().strftime("%Y%m%d_%H%M%S")
     if cfg.name is None:
         cfg.name = f"{e}_{d}_{t}"
+
     if cfg.group is None:
         cfg.group = f"{e}_{d}"
     wandb.init(

@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -28,7 +30,7 @@ class Seq2Seq(nn.Module):
     def forward(self, x, y, use_teacher_forcing=True):
         L, B = y.shape
         V = self.decoder.output_size
-        e_out, e_hidden = self.encoder(x)
+        e_out, e_hidden = self.encoder(x) # L x B x H, 1 x B x H or (1 x B x H, 1 x B x H) for LSTM
         d_hidden = e_hidden
         d_out_prob = torch.zeros(L - 1, B, V, device=self.device)
         d_out_tok = torch.full(
@@ -89,7 +91,7 @@ class Decoder(nn.Module):
 
     def forward(self, x, hidden, encoder_out=None):
         assert hidden is not None, "Hidden state is required for decoder"
-        L_de, B = x.shape # L_de is one here (due to teacher forcing)
+        L_de, B = x.shape  # L_de is one here (due to teacher forcing)
         embedded = self.embedding(x).view(L_de, B, -1)
         if self.use_attention:
             assert encoder_out is not None, "Encoder output is required for attention"
@@ -105,3 +107,45 @@ class Decoder(nn.Module):
         if torch.isnan(output[0]).any():
             raise ValueError("NaN detected in output")
         return output, hidden
+
+
+class TransformerEncoder(nn.Module):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        nhead,
+        num_layers,
+        dim_feedforward,
+        pos_encoder,
+        device,
+        pad_token,
+        dropout,
+    ):
+        super(TransformerEncoder, self).__init__()
+        self.hidden_size = hidden_size
+        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.pos_encoder = pos_encoder
+        self.pad_token = pad_token
+        self.device = device
+        self.TransformerEncoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                hidden_size,
+                nhead,
+                dim_feedforward,
+                dropout=dropout,
+            ),
+            num_layers,
+        )
+
+    def forward(self, x):
+        L, B = x.shape
+        src = self.embedding(x) * math.sqrt(self.hidden_size)
+        src = self.pos_encoder(src)
+        src_mask = self._get_mask(x)
+        output = self.TransformerEncoder(src, src_key_padding_mask=src_mask)
+        return output, output.mean(dim=0).unsqueeze(0)
+
+    def _get_mask(self, x):
+        mask = (x == self.pad_token).transpose(0, 1)
+        return mask

@@ -1,1 +1,1 @@
-from model.rnn import *
+from model.model import *

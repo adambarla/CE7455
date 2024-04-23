@@ -4,7 +4,7 @@ defaults:
     - decoder: gru
 
 model:
-    _target_: model.rnn.Seq2Seq
+    _target_: model.model.Seq2Seq
     encoder: ${encoder}
     decoder: ${decoder}
     teacher_forcing_ratio: ${teacher_forcing_ratio}
@@ -45,6 +45,7 @@ test_size: 0.1
 val_size: 0.1
 reverse: true
 max_grad_norm: 1
+dropout: 0.1
 
 seed: 42
 device: null  # null means that the device will be selected automatically
