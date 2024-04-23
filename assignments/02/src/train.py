@@ -31,22 +31,21 @@ def train_iters(
         s = f"Epoch: {epoch:>{len(str(epochs))}}/{epochs}"
         print("=" * len(s))
         print(s)
-        with torch.autograd.set_detect_anomaly(True):
-            with tqdm(total=len(tr_loader), desc="Training") as bar:
-                for inputs, targets in tr_loader:
-                    V = out_lang.n_words
-                    optimizer.zero_grad()
-                    out_tok, out_prob = model(inputs, targets)
-                    loss = criterion(out_prob.view(-1, V), targets[1:].view(-1))
-                    loss.backward()
-                    # torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-                    optimizer.step()
-                    loss_sum += loss.item()
-                    wandb.log({"train_loss": loss_sum / i})
-                    bar.set_postfix(loss=loss_sum / i)
-                    bar.update(1)
-                    i += 1
-                bar.close()
+        with tqdm(total=len(tr_loader), desc="Training") as bar:
+            for inputs, targets in tr_loader:
+                V = out_lang.n_words
+                optimizer.zero_grad()
+                out_tok, out_prob = model(inputs, targets)
+                loss = criterion(out_prob.view(-1, V), targets[1:].view(-1))
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                optimizer.step()
+                loss_sum += loss.item()
+                wandb.log({"train_loss": loss_sum / i})
+                bar.set_postfix(loss=loss_sum / i)
+                bar.update(1)
+                i += 1
+            bar.close()
         metrics = test(model, out_lang, va_loader, criterion, "valid")
         if early_stopping.should_stop(metrics):
             print(f"Early stopping triggered in epoch {epoch + 1}")
@@ -79,6 +78,7 @@ def test(
     loader,
     criterion,
     name,
+        n=10,
 ):
     model.eval()
     rouge = torchmetrics.text.rouge.ROUGEScore()  # todo: refactor
@@ -92,7 +92,6 @@ def test(
                 out_tok, out_prob = model(inputs, targets, use_teacher_forcing=False)
                 loss = criterion(out_prob.view(-1, V), targets[1:].view(-1))
                 loss_sum += loss.item()
-                print(out_tok[0])
                 out_sentences = output_lang.decode(
                     out_tok.transpose(0, 1)
                 )  # L x B -> B x L
@@ -102,7 +101,7 @@ def test(
                 bar.update(1)
                 bar.set_postfix(loss=loss_sum / (i + 1))
             bar.close()
-    for i in range(10):
+    for i in range(min(n, len(hypothesis))):
         print("<", hypothesis[i])
         print(">", references[i][0])
         print("")

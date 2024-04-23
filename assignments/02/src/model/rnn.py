@@ -30,21 +30,25 @@ class Seq2Seq(nn.Module):
         V = self.decoder.output_size
         e_out, e_hidden = self.encoder(x)
         d_hidden = e_hidden
-        d_out_prob = torch.zeros(L-1, B, V, device=self.device)
+        d_out_prob = torch.zeros(L - 1, B, V, device=self.device)
         d_out_tok = torch.full(
             (L, B), self.pad_token, device=self.device, dtype=torch.long
         )
         d_in = torch.full((1, B), self.sos_token, device=self.device, dtype=torch.long)
-        for i in range(L-1):
+        for i in range(L - 1):
             d_out_prob[i], d_hidden = self.decoder(d_in, d_hidden)
-            top_v, top_i = d_out_prob[i].topk(1, dim=1)
+            _, top_i = d_out_prob[i].topk(1, dim=1)
+            top_i = top_i.view(1, B)
             d_out_tok[i] = d_in
             if use_teacher_forcing:
-                forced_mask = torch.rand(B, device=self.device) < self.teacher_forcing_ratio
-                d_in = torch.where(forced_mask, y[i+1], top_i.squeeze().detach())
+                msk = (
+                    torch.rand((1, B), device=self.device) < self.teacher_forcing_ratio
+                )
+                d_in = torch.where(msk, y[i + 1].view(1, B), top_i)
             else:
-                d_in = top_i.squeeze().detach()
+                d_in = top_i
         return d_out_tok, d_out_prob
+
 
 class Encoder(nn.Module):
     def __init__(self, input_size, hidden_size, base, device):
@@ -53,6 +57,7 @@ class Encoder(nn.Module):
         self.device = device
         self.embedding = nn.Embedding(input_size, hidden_size)
         self.base = base
+        torch.nn.init.xavier_uniform_(self.embedding.weight)
 
     def forward(self, x):
         L, B = x.shape
@@ -70,19 +75,19 @@ class Decoder(nn.Module):
         self.embedding = nn.Embedding(output_size, hidden_size)
         self.base = base
         self.out = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=1)
         torch.nn.init.xavier_uniform_(self.embedding.weight)
         torch.nn.init.xavier_uniform_(self.out.weight)
         self.out.bias.data.fill_(0)
 
     def forward(self, x, hidden):
         assert hidden is not None, "Hidden state is required for decoder"
-        if x.dim() == 1:
-            x = x.unsqueeze(0)
         L, B = x.shape
         # todo: Your code here
         embedded = self.embedding(x).view(L, B, -1)
         output = F.relu(embedded)
         output, hidden = self.base(output, hidden)  # output is L x B x H
-        output = self.softmax(self.out(output[0]))
+        output = self.out(output[0])
+        output = F.log_softmax(output, dim=1)
+        if torch.isnan(output[0]).any():
+            raise ValueError("NaN detected in output")
         return output, hidden
