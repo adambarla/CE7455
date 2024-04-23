@@ -51,9 +51,10 @@ class Seq2Seq(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, input_size, hidden_size, base, device):
+    def __init__(self, input_size, hidden_size, base, device, bidirectional=False):
         super(Encoder, self).__init__()
         self.hidden_size = hidden_size
+        self.bidirectional = bidirectional
         self.device = device
         self.embedding = nn.Embedding(input_size, hidden_size)
         self.base = base
@@ -63,7 +64,14 @@ class Encoder(nn.Module):
         L, B = x.shape
         embedded = self.embedding(x).view(L, B, -1)
         output, hidden = self.base(embedded)
+        if self.base.__class__.__name__ == "LSTM":
+            if self.bidirectional:
+                hidden = (
+                    hidden[0].transpose(1,0).reshape(1,B,-1),
+                    hidden[1].transpose(1,0).reshape(1,B,-1),
+                )
         return output, hidden
+
 
 
 class Decoder(nn.Module):

@@ -77,7 +77,7 @@ def test(
     loader,
     criterion,
     name,
-        n=10,
+    n=10,
 ):
     model.eval()
     rouge = torchmetrics.text.rouge.ROUGEScore()  # todo: refactor
@@ -134,6 +134,11 @@ def main(cfg: DictConfig):
         cfg.decoder,
         output_size=out_lang.n_words,
         device=device,
+        hidden_size=encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1),
+        base={
+            "hidden_size": encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1),
+            "input_size": encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1)
+        },
     ).to(device)
     model = hydra.utils.instantiate(
         cfg.model,
