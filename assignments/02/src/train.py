@@ -114,11 +114,13 @@ def main(cfg: DictConfig):
         cfg.decoder,
         output_size=out_lang.n_words,
         device=device,
-        hidden_size=encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1),
+        hidden_size=encoder.hidden_size
+        * (2 if cfg.encoder.get("bidirectional", False) else 1),
         base={
             "hidden_size": encoder.hidden_size
-            * (2 if cfg.encoder.bidirectional else 1),
-            "input_size": encoder.hidden_size * (2 if cfg.encoder.bidirectional else 1),
+            * (2 if cfg.encoder.get("bidirectional", False) else 1),
+            "input_size": encoder.hidden_size
+            * (2 if cfg.encoder.get("bidirectional", False) else 1),
         },
     ).to(device)
     model = hydra.utils.instantiate(
