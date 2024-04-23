@@ -1,3 +1,4 @@
+import os
 import re
 import unicodedata
 import zipfile
@@ -11,6 +12,9 @@ from torch.utils.data import DataLoader, Dataset
 def download_and_extract(lang1, lang2):
     url = f"http://www.manythings.org/anki/{lang1}-{lang2}.zip"
     extract_to = f"data/{lang1}-{lang2}/"
+    if os.path.exists(extract_to + f"{lang1}.txt"):
+        print("Data already present.")
+        return
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
     }
@@ -21,15 +25,15 @@ def download_and_extract(lang1, lang2):
         )
     z = zipfile.ZipFile(BytesIO(r.content))
     z.extractall(extract_to)
+    print("Downloaded and extracted data.")
 
 
 class LangDataset(Dataset):
-    def __init__(self, pairs, input_lang, output_lang, device, eos_token):
+    def __init__(self, pairs, input_lang, output_lang, device):
         self.pairs = pairs
         self.input_lang = input_lang
         self.output_lang = output_lang
         self.device = device
-        self.eos_token = eos_token
 
     def __len__(self):
         return len(self.pairs)
@@ -42,59 +46,84 @@ class LangDataset(Dataset):
 
     def tensor_from_sentence(self, lang, sentence):
         indexes = lang.encode(sentence)
-        indexes.append(self.eos_token)
+        indexes = [lang.sos_token] + indexes + [lang.eos_token]
         tensor = torch.tensor(indexes, dtype=torch.long, device=self.device)
         return tensor
 
 
 def load_data(
-    seed,
-    lang1,
-    lang2,
-    test_size,
-    val_size,
-    sos_token_id,
-    eos_token_id,
-    max_length,
+    cfg,
     device,
-    batch_size,
 ):
-    download_and_extract(lang1, lang2)
-    input_lang, output_lang, pairs = prepare_data(
-        lang1, lang2, sos_token_id, eos_token_id, max_length, reverse=True
-    )
+    download_and_extract(cfg.l1, cfg.l2)
+    in_lang, out_lang, pairs = prepare_data(cfg, reverse=cfg.reverse)
     x = [i[0] for i in pairs]
     y = [i[1] for i in pairs]
-    assert val_size + test_size < 1
-    fraction = test_size + val_size
+    assert cfg.val_size + cfg.test_size < 1
+    fraction = cfg.test_size + cfg.val_size
     x_tr, x_tmp, y_tr, y_tmp = train_test_split(
-        x, y, test_size=fraction, random_state=seed
+        x, y, test_size=fraction, random_state=cfg.seed
     )
-    fraction = test_size / (test_size + val_size)
+    fraction = cfg.test_size / (cfg.test_size + cfg.val_size)
     x_va, x_te, y_va, y_te = train_test_split(
-        x_tmp, y_tmp, test_size=fraction, random_state=seed
+        x_tmp, y_tmp, test_size=fraction, random_state=cfg.seed
     )
     tr_pairs = list(zip(x_tr, y_tr))
     va_pairs = list(zip(x_va, y_va))
     te_pairs = list(zip(x_te, y_te))
-    tr_dataset = LangDataset(tr_pairs, input_lang, output_lang, device, eos_token_id)
-    va_dataset = LangDataset(va_pairs, input_lang, output_lang, device, eos_token_id)
-    te_dataset = LangDataset(te_pairs, input_lang, output_lang, device, eos_token_id)
-    tr_loader = DataLoader(tr_dataset, batch_size=batch_size, shuffle=True)
-    va_loader = DataLoader(va_dataset, batch_size=batch_size, shuffle=False)
-    te_loader = DataLoader(te_dataset, batch_size=batch_size, shuffle=False)
-    return tr_loader, va_loader, te_loader, input_lang, output_lang
+    tr_dataset = LangDataset(tr_pairs, in_lang, out_lang, device)
+    va_dataset = LangDataset(va_pairs, in_lang, out_lang, device)
+    te_dataset = LangDataset(te_pairs, in_lang, out_lang, device)
+    collator = Collator(cfg.pad_token)
+
+    tr_loader = DataLoader(
+        tr_dataset, batch_size=cfg.batch_size, shuffle=True, collate_fn=collator
+    )
+    va_loader = DataLoader(
+        va_dataset, batch_size=cfg.batch_size, shuffle=False, collate_fn=collator
+    )
+    te_loader = DataLoader(
+        te_dataset, batch_size=cfg.batch_size, shuffle=False, collate_fn=collator
+    )
+    return tr_loader, va_loader, te_loader, in_lang, out_lang
+
+
+class Collator(object):
+    def __init__(self, pad_token):
+        self.pad_token = pad_token
+
+    def __call__(self, batch):
+        inputs, targets = zip(*batch)
+        inputs = torch.nn.utils.rnn.pad_sequence(
+            inputs, batch_first=False, padding_value=self.pad_token
+        )
+        targets = torch.nn.utils.rnn.pad_sequence(
+            targets, batch_first=False, padding_value=self.pad_token
+        )
+        return inputs, targets
 
 
 class Lang:
-    def __init__(self, name, sos_token_id, eos_token_id):
+    def __init__(self, name, sos_token, eos_token, pad_token, unk_token):
         self.name = name
-        self.sos_token_id = sos_token_id
-        self.eos_token_id = eos_token_id
-        self.word2index = {}
-        self.word2count = {}
-        self.index2word = {sos_token_id: "<s>", eos_token_id: "</s>"}
-        self.n_words = 2
+        self.sos_token = sos_token
+        self.eos_token = eos_token
+        self.pad_token = pad_token
+        self.unk_token = unk_token
+        self.word2index = {
+            "<s>": sos_token,
+            "</s>": eos_token,
+            "<pad>": pad_token,
+            "<unk>": unk_token,
+        }
+        self.index2word = {
+            sos_token: "<s>",
+            eos_token: "</s>",
+            pad_token: "<pad>",
+            unk_token: "<unk>",
+        }
+        self.special_tokens = {sos_token, eos_token, pad_token, unk_token}
+        self.n_words = 4
 
     def add_sentence(self, sentence):
         for word in sentence.split(" "):
@@ -103,19 +132,27 @@ class Lang:
     def add_word(self, word):
         if word not in self.word2index:
             self.word2index[word] = self.n_words
-            self.word2count[word] = 1
             self.index2word[self.n_words] = word
             self.n_words += 1
-        else:
-            self.word2count[word] += 1
 
     def encode(self, sentence):
-        return [self.word2index[word] for word in sentence.split(" ")]
+        return [
+            self.word2index.get(word, self.unk_token) for word in sentence.split(" ")
+        ]
 
     def decode(self, x):
         if isinstance(x, torch.Tensor):
             x = x.tolist()
-        return " ".join([self.index2word.get(i, "<unk>") for i in x])
+        if isinstance(x, list) and (not x or isinstance(x[0], int)):
+            x = [x]
+        return [
+            " ".join(
+                self.index2word.get(t, self.index2word[self.unk_token])
+                for t in seq
+                if t not in self.special_tokens
+            )
+            for seq in x
+        ]
 
 
 def unicode_to_ascii(s):
@@ -131,22 +168,20 @@ def normalize_string(s):
     return s
 
 
-def read_langs(lang1, lang2, sos_token_id, eos_token_id, reverse=False):
-    print("Reading lines...")
+def read_langs(cfg, reverse=False):
     lines = (
-        open(f"data/{lang1}-{lang2}/{lang1}.txt", encoding="utf-8")
+        open(f"data/{cfg.l1}-{cfg.l2}/{cfg.l1}.txt", encoding="utf-8")
         .read()
         .strip()
         .split("\n")
     )
     pairs = [[normalize_string(s) for s in l.split("\t")[:2]] for l in lines]
+    l1 = cfg.l1 if not reverse else cfg.l2
+    l2 = cfg.l2 if not reverse else cfg.l1
     if reverse:
         pairs = [list(reversed(p)) for p in pairs]
-        input_lang = Lang(lang2, sos_token_id=sos_token_id, eos_token_id=eos_token_id)
-        output_lang = Lang(lang1, sos_token_id=sos_token_id, eos_token_id=eos_token_id)
-    else:
-        input_lang = Lang(lang1, sos_token_id=sos_token_id, eos_token_id=eos_token_id)
-        output_lang = Lang(lang2, sos_token_id=sos_token_id, eos_token_id=eos_token_id)
+    input_lang = Lang(l1, cfg.sos_token, cfg.eos_token, cfg.pad_token, cfg.unk_token)
+    output_lang = Lang(l2, cfg.sos_token, cfg.eos_token, cfg.pad_token, cfg.unk_token)
     return input_lang, output_lang, pairs
 
 
@@ -178,12 +213,10 @@ def filter_pairs(pairs, max_length):
     return [pair for pair in pairs if filter_pair(pair, max_length=max_length)]
 
 
-def prepare_data(lang1, lang2, sos_token_id, eos_token_id, max_length, reverse=False):
-    input_lang, output_lang, pairs = read_langs(
-        lang1, lang2, sos_token_id, eos_token_id, reverse
-    )
+def prepare_data(cfg, reverse):
+    input_lang, output_lang, pairs = read_langs(cfg, reverse=reverse)
     print("Read %s sentence pairs" % len(pairs))
-    pairs = filter_pairs(pairs, max_length)
+    pairs = filter_pairs(pairs, cfg.max_length)
     print("Trimmed to %s sentence pairs" % len(pairs))
     print("Counting words...")
     for pair in pairs:

@@ -22,6 +22,7 @@ def train_iters(
     optimizer,
     out_lang,
     early_stopping,
+    max_grad_norm,
 ):
     loss_sum = 0
     i = 1
@@ -30,21 +31,22 @@ def train_iters(
         s = f"Epoch: {epoch:>{len(str(epochs))}}/{epochs}"
         print("=" * len(s))
         print(s)
-        with tqdm(total=len(tr_loader), desc="Training") as bar:
-            for inputs, targets in tr_loader:
-                inputs = inputs[0]
-                targets = targets[0]
-                optimizer.zero_grad()
-                outputs = model(inputs, targets)
-                loss = criterion(outputs, targets.squeeze())
-                loss.backward()
-                optimizer.step()
-                loss_sum += loss.item()
-                wandb.log({"train_loss": loss_sum / i})
-                bar.set_postfix(loss=loss_sum / i)
-                bar.update(1)
-                i += 1
-            bar.close()
+        with torch.autograd.set_detect_anomaly(True):
+            with tqdm(total=len(tr_loader), desc="Training") as bar:
+                for inputs, targets in tr_loader:
+                    V = out_lang.n_words
+                    optimizer.zero_grad()
+                    out_tok, out_prob = model(inputs, targets)
+                    loss = criterion(out_prob.view(-1, V), targets[1:].view(-1))
+                    loss.backward()
+                    # torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                    optimizer.step()
+                    loss_sum += loss.item()
+                    wandb.log({"train_loss": loss_sum / i})
+                    bar.set_postfix(loss=loss_sum / i)
+                    bar.update(1)
+                    i += 1
+                bar.close()
         metrics = test(model, out_lang, va_loader, criterion, "valid")
         if early_stopping.should_stop(metrics):
             print(f"Early stopping triggered in epoch {epoch + 1}")
@@ -58,15 +60,16 @@ def evaluate_randomly(
     loader,
     n=10,
 ):
-    for i, (inputs, targets) in enumerate(loader):
-        if i >= n:
-            break
-        inputs = inputs[0]
-        targets = targets[0]
-        print(">", input_lang.decode(inputs))
-        print("=", output_lang.decode(targets))
-        outputs, _ = model.predict(inputs)
-        print("<", output_lang.decode(outputs))
+    n = min(n, len(loader))
+    inputs, targets = next(iter(loader))
+    sen_in = input_lang.decode(inputs.transpose(0, 1))
+    sen_tgt = output_lang.decode(targets.transpose(0, 1))
+    out_tok, out_prob = model(inputs, targets, use_teacher_forcing=False)
+    sen_out = output_lang.decode(out_tok.transpose(0, 1))
+    for i in range(n):
+        print(">", sen_in[i])
+        print("=", sen_tgt[i])
+        print("<", sen_out[i])
         print("")
 
 
@@ -85,18 +88,24 @@ def test(
     with torch.no_grad():
         with tqdm(total=len(loader), desc=f"Testing {name} partion") as bar:
             for i, (inputs, targets) in enumerate(loader):
-                inputs = inputs[0]
-                targets = targets[0]
-                outputs, probs = model.predict(inputs)
-                loss = criterion(probs[: len(targets)], targets.squeeze())
+                V = output_lang.n_words
+                out_tok, out_prob = model(inputs, targets, use_teacher_forcing=False)
+                loss = criterion(out_prob.view(-1, V), targets[1:].view(-1))
                 loss_sum += loss.item()
-                output_sentence = output_lang.decode(outputs)
-                target_sentence = output_lang.decode(targets)
-                hypothesis.append(output_sentence)
-                references.append([target_sentence])
+                print(out_tok[0])
+                out_sentences = output_lang.decode(
+                    out_tok.transpose(0, 1)
+                )  # L x B -> B x L
+                tgt_sentences = output_lang.decode(targets.transpose(0, 1))
+                hypothesis.extend(out_sentences)
+                references.extend([[s] for s in tgt_sentences])
                 bar.update(1)
                 bar.set_postfix(loss=loss_sum / (i + 1))
             bar.close()
+    for i in range(10):
+        print("<", hypothesis[i])
+        print(">", references[i][0])
+        print("")
     rs = rouge(hypothesis, references)
     metrics = {k: v.item() for k, v in rs.items()}
     metrics["loss"] = loss_sum / len(loader)
@@ -117,16 +126,8 @@ def main(cfg: DictConfig):
     set_deterministic(cfg.seed)
     device = get_device(cfg)
     tr_loader, va_loader, te_loader, in_lang, out_lang = load_data(
-        cfg.seed,
-        cfg.l1,
-        cfg.l2,
-        cfg.test_size,
-        cfg.val_size,
-        cfg.sos_token,
-        cfg.eos_token,
-        cfg.max_length,
+        cfg,
         device,
-        cfg.batch_size,
     )
     encoder = hydra.utils.instantiate(
         cfg.encoder, input_size=in_lang.n_words, device=device
@@ -155,6 +156,7 @@ def main(cfg: DictConfig):
         optimizer=optimizer,
         out_lang=out_lang,
         early_stopping=early_stopping,
+        max_grad_norm=cfg.max_grad_norm,
     )
     evaluate_randomly(
         model,
