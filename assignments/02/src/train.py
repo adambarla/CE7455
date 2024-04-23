@@ -38,7 +38,6 @@ def train_iters(
                 out_tok, out_prob = model(inputs, targets)
                 loss = criterion(out_prob.view(-1, V), targets[1:].view(-1))
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
                 optimizer.step()
                 loss_sum += loss.item()
                 wandb.log({"train_loss": loss_sum / i})
