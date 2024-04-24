@@ -1,0 +1,6 @@
+,rouge1_fmeasure,rouge2_fmeasure,rougeL_fmeasure,rougeLsum_fmeasure
+transformer,0.717,0.53,0.713,0.713
+gru_attention,0.725,0.565,0.723,0.723
+bidirectional_lstm,0.709,0.541,0.707,0.707
+lstm,0.701,0.538,0.698,0.698
+gru,0.708,0.423,0.705,0.705
