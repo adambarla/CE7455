@@ -30,7 +30,9 @@ class Seq2Seq(nn.Module):
     def forward(self, x, y, use_teacher_forcing=True):
         L, B = y.shape
         V = self.decoder.output_size
-        e_out, e_hidden = self.encoder(x) # L x B x H, 1 x B x H or (1 x B x H, 1 x B x H) for LSTM
+        e_out, e_hidden = self.encoder(
+            x
+        )  # L x B x H, 1 x B x H or (1 x B x H, 1 x B x H) for LSTM
         d_hidden = e_hidden
         d_out_prob = torch.zeros(L - 1, B, V, device=self.device)
         d_out_tok = torch.full(

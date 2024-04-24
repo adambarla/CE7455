@@ -15,9 +15,9 @@ class Patience:
         if self.metric not in results:
             raise ValueError(f"Metric {self.metric} not in results.")
         if (
-                self.best is None
-                or (self.mode == "min" and results[self.metric] < self.best)
-                or (self.mode == "max" and results[self.metric] > self.best)
+            self.best is None
+            or (self.mode == "min" and results[self.metric] < self.best)
+            or (self.mode == "max" and results[self.metric] > self.best)
         ):
             self.best = results[self.metric]
             self.counter = 0

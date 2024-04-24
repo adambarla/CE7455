@@ -13,16 +13,22 @@ def get_device(cfg: DictConfig) -> torch.device:
         device = torch.device(
             "cuda"
             if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
+            else "mps" if torch.backends.mps.is_available() else "cpu"
         )
     return device
 
 
 def init_run(cfg):
-    e = cfg.encoder.base._target_.split(".")[-1] if cfg.encoder.get("base") else cfg.encoder._target_.split(".")[-1]
-    d = cfg.decoder.base._target_.split(".")[-1] if cfg.decoder.get("base") else cfg.decoder._target_.split(".")[-1]
+    e = (
+        cfg.encoder.base._target_.split(".")[-1]
+        if cfg.encoder.get("base")
+        else cfg.encoder._target_.split(".")[-1]
+    )
+    d = (
+        cfg.decoder.base._target_.split(".")[-1]
+        if cfg.decoder.get("base")
+        else cfg.decoder._target_.split(".")[-1]
+    )
     # m = cfg.model._target_.split(".")[-1]
     t = datetime.now().strftime("%Y%m%d_%H%M%S")
     if cfg.name is None:
